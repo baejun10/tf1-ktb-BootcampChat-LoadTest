@@ -119,7 +119,8 @@ public class RoomLeaveHandler {
         if (roomOpt.isEmpty()) {
             return;
         }
-        
+
+        // TODO : 025 : Stream에서 map(userRepository::findById)는 참가자 수만큼 DB 쿼리를 발생시키므로 N+1 문제가 발생한다.
         var participantList = roomOpt.get()
                 .getParticipantIds()
                 .stream()
