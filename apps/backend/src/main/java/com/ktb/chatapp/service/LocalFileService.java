@@ -27,6 +27,11 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class LocalFileService implements FileService {
 
+    /**
+     * 로컬 디스크를 스토리지로 사용하는 FileService 구현체.
+     * 업로드/다운로드 시 파일명 위변조, 경로 탈출, 방 참가 권한을 모두 검증한다.
+     */
+
     private final Path fileStorageLocation;
     private final FileRepository fileRepository;
     private final MessageRepository messageRepository;

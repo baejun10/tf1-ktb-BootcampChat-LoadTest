@@ -18,6 +18,11 @@ import static java.net.InetAddress.*;
 @RequiredArgsConstructor
 public class RateLimitService {
 
+    /**
+     * Mongo 기반 RateLimitStore를 이용해 요청 빈도를 추적·제어하는 서비스.
+     * 실제 클라이언트 ID에 호스트명을 덧붙여 멀티 인스턴스 환경에서도 충돌 없이 제한을 공유한다.
+     */
+
     private final RateLimitStore rateLimitStore;
     @Value("${HOSTNAME:''}")
     private String hostName;

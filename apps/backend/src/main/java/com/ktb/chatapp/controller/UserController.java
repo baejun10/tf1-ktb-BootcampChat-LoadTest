@@ -29,6 +29,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
 
+/**
+ * 로그인한 사용자 정보를 조회·수정하고 프로필 이미지를 관리하는 컨트롤러.
+ * 인증 주체(Principal)를 직접 받아 서비스 계층으로 전달해 잔여 로직을 위임한다.
+ */
 @Tag(name = "사용자 (Users)", description = "사용자 프로필 관리 API - 프로필 조회, 수정, 이미지 업로드, 회원 탈퇴")
 @RequiredArgsConstructor
 @RestController

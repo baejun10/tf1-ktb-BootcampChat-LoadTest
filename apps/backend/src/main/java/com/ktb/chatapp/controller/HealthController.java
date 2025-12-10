@@ -9,6 +9,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 인프라 상태를 신속히 확인하기 위한 경량 헬스체크 컨트롤러.
+ * 현재 프로파일과 타임스탬프만 내려 성능에 영향을 주지 않는다.
+ */
 @RestController
 @RequiredArgsConstructor
 public class HealthController {

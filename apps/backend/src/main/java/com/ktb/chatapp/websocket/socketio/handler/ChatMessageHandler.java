@@ -33,6 +33,10 @@ import org.springframework.stereotype.Component;
 
 import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.*;
 
+/**
+ * Socket.IO `chat message` 이벤트를 처리하는 핵심 핸들러.
+ * 세션·레이트리밋·금칙어 검증 → 메시지 저장 → 브로드캐스트 → AI 호출까지의 파이프라인을 담당한다.
+ */
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "socketio.enabled", havingValue = "true", matchIfMissing = true)

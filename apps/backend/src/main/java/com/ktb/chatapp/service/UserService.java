@@ -26,6 +26,11 @@ import java.util.List;
 @Slf4j
 public class UserService {
 
+    /**
+     * 사용자 프로필 정보와 이미지 파일을 관리하는 애플리케이션 서비스.
+     * 파일 검증/저장을 FileService에 위임하면서 도메인 규칙(이름 변경, 탈퇴 등)을 유지한다.
+     */
+
     private final UserRepository userRepository;
     private final FileService fileService;
 

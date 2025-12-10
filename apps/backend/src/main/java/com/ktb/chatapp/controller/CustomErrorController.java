@@ -13,6 +13,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Spring Boot 기본 /error 응답을 API 친화적 JSON 구조로 변환하는 컨트롤러.
+ * 개발/운영 프로파일 여부에 따라 스택 트레이스 노출을 제어한다.
+ */
 @RestController
 public class CustomErrorController implements ErrorController {
 

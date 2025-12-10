@@ -31,6 +31,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 채팅방 CRUD, 참여, 헬스체크를 제공하는 메인 REST 컨트롤러.
+ * 모든 공개 HTTP 요청에 대해 레이트 리밋과 캐시 전략을 조절해 프론트엔드가 안정적으로 방 목록을 소비하게 한다.
+ */
 @Tag(name = "채팅방 (Rooms)", description = "채팅방 생성 및 관리 API - 채팅방 목록 조회, 생성, 참여, 헬스체크")
 @Slf4j
 @RequiredArgsConstructor
