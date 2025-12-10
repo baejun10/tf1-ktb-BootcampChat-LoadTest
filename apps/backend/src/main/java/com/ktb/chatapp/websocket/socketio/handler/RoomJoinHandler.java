@@ -97,6 +97,7 @@ public class RoomJoinHandler {
             FetchMessagesRequest req = new FetchMessagesRequest(roomId, 30, null);
             FetchMessagesResponse messageLoadResult = messageLoader.loadMessages(req, userId);
 
+            //TODO : 방 재조회 없이 Mongo update 결과를 반환받거나 캐시에서 참가자 목록을 유지하면 재입장 시 불필요한 findById 를 줄일 수 있다.
             // 업데이트된 room 다시 조회하여 최신 participantIds 가져오기
             Optional<Room> roomOpt = roomRepository.findById(roomId);
             if (roomOpt.isEmpty()) {
@@ -105,6 +106,7 @@ public class RoomJoinHandler {
             }
 
             // 참가자 정보 조회
+            //TODO : 참가자 정보를 매번 userRepository.findById 로 순차 조회하는 대신 findAllById 또는 Redis 캐시를 사용해 대규모 방의 참가자 리스트 응답 시간을 줄여라.
             List<UserResponse> participants = roomOpt.get().getParticipantIds()
                     .stream()
                     .map(userRepository::findById)

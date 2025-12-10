@@ -250,6 +250,7 @@ public class ChatMessageHandler {
         messageResponse.setSender(UserResponse.from(sender));
         messageResponse.setMetadata(message.getMetadata());
 
+        //TODO : 이미 handleFileMessage 단계에서 File 메타데이터를 알고 있으므로 메시지 응답 생성 시 다시 fileRepository 를 hit 하지 않도록 캐시/파이프라인을 바꾸면 파일 메시지 전송 성능이 향상된다.
         if (message.getFileId() != null) {
             fileRepository.findById(message.getFileId())
                     .ifPresent(file -> messageResponse.setFile(FileResponse.from(file)));
