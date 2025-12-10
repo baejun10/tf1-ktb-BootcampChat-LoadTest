@@ -58,7 +58,7 @@ jobs:
     steps:
       - name: Create PEM file
         run: |
-          echo "${{ secrets.AWS_PEM_KEY }}" > key.pem
+          echo "${{ secrets.SSH_PEM_KEY }}" > key.pem
           chmod 600 key.pem
 
       - name: Deploy to All Servers
