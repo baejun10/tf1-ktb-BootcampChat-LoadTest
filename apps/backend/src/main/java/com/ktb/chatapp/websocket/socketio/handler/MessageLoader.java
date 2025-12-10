@@ -49,6 +49,28 @@ public class MessageLoader {
         }
     }
 
+    /**
+     * 메시지 로드 내부 로직
+     *
+     * 흐름:
+     * 1. 페이징 설정 (timestamp 내림차순으로 최신 메시지부터 조회)
+     * 2. DB에서 메시지 조회 (roomId, isDeleted=false, timestamp < before 조건)
+     * 3. 메시지 순서 재정렬 (DESC → ASC: 채팅 UI는 오래된 메시지가 위에 표시)
+     * 4. 읽음 상태 업데이트 (현재 사용자가 메시지를 읽음 처리)
+     * 5. MessageResponse 생성 (사용자 정보, 파일 정보 포함)
+     * 6. 응답 반환 (메시지 목록 + hasMore 플래그)
+     *
+     * 성능 특성:
+     * - DB 쿼리: 1회 (메시지 조회)
+     * - N+1 문제: User 조회 N회 + File 조회 M회 (TODO 014, 018 참고)
+     * - 메모리: O(limit) - 메시지 목록을 메모리에 적재
+     *
+     * @param roomId 조회할 채팅방 ID
+     * @param limit 조회할 메시지 수 (페이지 크기)
+     * @param before 이 시각 이전의 메시지만 조회 (페이지네이션 커서)
+     * @param userId 현재 사용자 ID (읽음 상태 업데이트용)
+     * @return 메시지 목록과 추가 페이지 존재 여부
+     */
     private FetchMessagesResponse loadMessagesInternal(
             String roomId,
             int limit,
@@ -66,9 +88,10 @@ public class MessageLoader {
         
         var messageIds = sortedMessages.stream().map(Message::getId).toList();
         messageReadStatusService.updateReadStatus(messageIds, userId);
-        
-        // 메시지 응답 생성
-        //TODO : 014 : 메시지 송신자 정보를 메시지 목록과 함께 batch 로킹하거나 projection 으로 합쳐 가져오면 메시지 수만큼 userRepository.findById 를 호출하는 N+1 문제를 줄일 수 있다.
+
+        //TODO : 014 : 메시지 송신자 정보를 메시지 목록과 함께 batch 로딩하거나 projection 으로 합쳐 가져오면 메시지 수만큼 userRepository.findById 를 호출하는 N+1 문제를 줄일 수 있다.
+        //TODO : 022 : sortedMessages 를 stream() 으로 2번 순회하는 대신, 한 번의 순회로 messageIds 추출과 MessageResponse 생성을 동시에 처리하면 성능 개선 가능 (미미한 개선이지만 코드 간결화)
+        //TODO : 023 : messageReadStatusService.updateReadStatus 를 비동기(@Async)로 처리하면 메시지 로드 응답 속도를 개선할 수 있다 (읽음 상태는 eventual consistency 허용 가능)
         List<MessageResponse> messageResponses = sortedMessages.stream()
                 .map(message -> {
                     var user = findUserById(message.getSenderId());
