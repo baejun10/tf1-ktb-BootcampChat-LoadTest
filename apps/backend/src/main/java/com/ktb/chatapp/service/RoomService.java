@@ -173,7 +173,7 @@ public class RoomService {
         }
 
         Room savedRoom = roomRepository.save(room);
-        
+
         // Publish event for room created
         try {
             RoomResponse roomResponse = mapToRoomResponse(savedRoom, name);
@@ -181,7 +181,7 @@ public class RoomService {
         } catch (Exception e) {
             log.error("roomCreated 이벤트 발행 실패", e);
         }
-        
+
         return savedRoom;
     }
 
@@ -213,7 +213,7 @@ public class RoomService {
             room.getParticipantIds().add(user.getId());
             room = roomRepository.save(room);
         }
-        
+
         // Publish event for room updated
         try {
             RoomResponse roomResponse = mapToRoomResponse(room, name);
@@ -234,11 +234,8 @@ public class RoomService {
         }
 
         //TODO : 001 : room participantIds 를 한 번에 로딩할 수 있도록 batch query 또는 projection 으로 N+1 조회를 제거하면 대규모 방 목록 조회가 빨라진다.
-        List<User> participants = room.getParticipantIds().stream()
-            .map(userRepository::findById)
-            .filter(Optional::isPresent)
-            .map(Optional::get)
-            .toList();
+        // -> MongoDB의 $in 연산자를 사용해 배치 쿼리 1번만 실행합니다.
+        List<User> participants = userRepository.findByIdIn(room.getParticipantIds());
 
         // 최근 10분간 메시지 수 조회
         LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
