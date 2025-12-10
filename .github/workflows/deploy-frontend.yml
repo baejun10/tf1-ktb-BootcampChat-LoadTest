@@ -1,0 +1,103 @@
+name: Frontend CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - feature/fe-cicd
+    paths:
+      - '.github/workflows/deploy-frontend.yml'
+      - 'apps/frontend/**'
+  workflow_dispatch:
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build:production
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: Zip Artifacts
+        run: |
+          cd .next/standalone
+          zip -r ../../frontend-build.zip .
+        # The zip is now at apps/frontend/frontend-build.zip
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp frontend-build.zip s3://${{ secrets.AWS_S3_BUCKET }}/frontend/latest.zip
+
+  deploy:
+    needs: build-and-upload
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create PEM file
+        run: |
+          echo "${{ secrets.SSH_PEM_KEY }}" > key.pem
+          chmod 600 key.pem
+
+      - name: Deploy to All Servers
+        run: |
+          # Split comma-separated hosts into an array
+          IFS=',' read -ra HOSTS <<< "${{ vars.AWS_FE_SERVER_HOSTS }}"
+          
+          for host in "${HOSTS[@]}"; do
+            # Trim whitespace just in case
+            host=$(echo "$host" | xargs)
+            echo "Deploying to $host..."
+            
+            ssh -i key.pem -o StrictHostKeyChecking=no ubuntu@"$host" "
+              # Create directory
+              mkdir -p /home/ubuntu/chat-app/frontend
+              
+              # Download from S3 (Assumes EC2 has IAM Role with S3 Read access)
+              # If not, you might need to pass creds (not recommended) or use presigned URLs.
+              # Here we assume IAM Role.
+              aws s3 cp s3://${{ secrets.AWS_S3_BUCKET }}/frontend/latest.zip deploy.zip
+              
+              # Unzip
+              unzip -q -o deploy.zip -d /home/ubuntu/chat-app/frontend
+              rm deploy.zip
+              
+              # Install prod dependencies (minimal) and Restart
+              cd /home/ubuntu/chat-app/frontend
+              
+              # Optional: npm install if native modules need rebuilding or some are missing
+              # Standalone usually includes node_modules, but verified
+              # sudo npm install --production 
+
+              if pm2 list | grep -q 'chat-frontend'; then
+                pm2 restart chat-frontend --update-env
+              else
+                pm2 start server.js --name 'chat-frontend'
+              fi
+              
+              pm2 save
+            "
+          done
