@@ -70,7 +70,8 @@ public class MessageReadHandler {
                 client.sendEvent(ERROR, Map.of("message", "Room access denied"));
                 return;
             }
-            
+
+            // TODO : 022 : updateReadStatus 를 비동기(@Async)로 처리 (고려) => 최종 일관성 문제 있을 수 있음!!!!
             messageReadStatusService.updateReadStatus(data.getMessageIds(), userId);
 
             MessagesReadResponse response = new MessagesReadResponse(userId, data.getMessageIds());
