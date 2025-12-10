@@ -6,6 +6,7 @@ on:
       - main
       - feature/fe-cicd
     paths:
+      - '.github/workflows/deploy-frontend.yml'
       - 'apps/frontend/**'
   workflow_dispatch:
 
@@ -81,7 +82,7 @@ jobs:
               aws s3 cp s3://${{ secrets.AWS_S3_BUCKET }}/frontend/latest.zip deploy.zip
               
               # Unzip
-              unzip -o deploy.zip -d /home/ubuntu/chat-app/frontend
+              unzip -q -o deploy.zip -d /home/ubuntu/chat-app/frontend
               rm deploy.zip
               
               # Install prod dependencies (minimal) and Restart
