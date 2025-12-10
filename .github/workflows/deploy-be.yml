@@ -2,7 +2,7 @@ name: Deploy Backend (Dev/Single)
 
 on:
   push:
-    branches: [ "feature/be-cicd" ] # 또는 develop
+    branches: [ "main", "feature/be-cicd" ] # 또는 develop
     paths:
       - 'apps/backend/**'
       - '.github/workflows/deploy-dev.yml'
