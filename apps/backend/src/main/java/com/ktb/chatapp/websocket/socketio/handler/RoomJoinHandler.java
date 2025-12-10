@@ -27,6 +27,13 @@ import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.*;
 /**
  * 방 입장 처리 핸들러
  * 채팅방 입장, 참가자 관리, 초기 메시지 로드 담당
+ *
+ * 주요 기능:
+ * 1. 사용자 인증 및 검증
+ * 2. 채팅방 참가자 목록 업데이트 (MongoDB $addToSet 원자적 연산)
+ * 3. 초기 메시지 30개 로드
+ * 4. 입장 시스템 메시지 생성 및 브로드캐스트
+ * 5. 참가자 목록 업데이트 이벤트 전송
  */
 @Slf4j
 @Component
@@ -42,7 +49,28 @@ public class RoomJoinHandler {
     private final MessageLoader messageLoader;
     private final MessageResponseMapper messageResponseMapper;
     private final RoomLeaveHandler roomLeaveHandler;
-    
+
+
+    /**
+     * 방 입장 이벤트 핸들러
+     *
+     * 흐름:
+     * 1. 사용자 인증 (userId 추출)
+     * 2. 사용자 존재 여부 검증
+     * 3. 채팅방 존재 여부 검증
+     * 4. 중복 입장 체크 (이미 입장한 경우 조기 반환)
+     * 5. 참가자 목록 업데이트 (MongoDB $addToSet)
+     * 6. Socket.IO room 입장 + 메모리 상태 업데이트
+     * 7. 입장 시스템 메시지 생성 및 저장
+     * 8. 초기 메시지 30개 로드
+     * 9. 참가자 정보 조회 (N+1 문제 있음 - TODO 020)
+     * 10. 클라이언트에 JOIN_ROOM_SUCCESS 응답
+     * 11. 방 전체에 입장 메시지 브로드캐스트
+     * 12. 방 전체에 참가자 목록 업데이트 브로드캐스트
+     *
+     * @param client Socket.IO 클라이언트
+     * @param roomId 입장할 채팅방 ID
+     */
     @OnEvent(JOIN_ROOM)
     public void handleJoinRoom(SocketIOClient client, String roomId) {
         try {
@@ -106,7 +134,8 @@ public class RoomJoinHandler {
             }
 
             // 참가자 정보 조회
-            //TODO : 020 : 참가자 정보를 매번 userRepository.findById 로 순차 조회하는 대신 findAllById 또는 Redis 캐시를 사용해 대규모 방의 참가자 리스트 응답 시간을 줄여라.
+            //TODO : 020 : 참가자 정보를 매번 userRepository.findById 로 순차 조회하는 대신 findAllById 또는 Redis 캐시를 사용해 대규모 방의 참가자 리스트 응답 시간을 줄일 수 있다.
+            //TODO : 024 : Stream에서 map(userRepository::findById)는 참가자 수만큼 DB 쿼리를 발생시키므로 N+1 문제가 발생한다. userRepository.findAllById()로 batch 조회하라.
             List<UserResponse> participants = roomOpt.get().getParticipantIds()
                     .stream()
                     .map(userRepository::findById)
