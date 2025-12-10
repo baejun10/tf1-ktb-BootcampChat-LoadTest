@@ -68,7 +68,7 @@ public class MessageLoader {
         messageReadStatusService.updateReadStatus(messageIds, userId);
         
         // 메시지 응답 생성
-        //TODO : 메시지 송신자 정보를 메시지 목록과 함께 batch 로킹하거나 projection 으로 합쳐 가져오면 메시지 수만큼 userRepository.findById 를 호출하는 N+1 문제를 줄일 수 있다.
+        //TODO : 014 : 메시지 송신자 정보를 메시지 목록과 함께 batch 로킹하거나 projection 으로 합쳐 가져오면 메시지 수만큼 userRepository.findById 를 호출하는 N+1 문제를 줄일 수 있다.
         List<MessageResponse> messageResponses = sortedMessages.stream()
                 .map(message -> {
                     var user = findUserById(message.getSenderId());

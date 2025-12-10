@@ -56,7 +56,7 @@ public class MessageReactionHandler {
             log.debug("Message reaction processed - type: {}, reaction: {}, messageId: {}, userId: {}",
                 data.getType(), data.getReaction(), message.getId(), userId);
 
-            //TODO : 리액션 추가/삭제를 전체 Message 문서를 저장하는 대신 Mongo partial update ($set/$pull)를 사용하면 write latency 와 document contention 을 줄일 수 있다.
+            //TODO : 004 : 리액션 추가/삭제를 전체 Message 문서를 저장하는 대신 Mongo partial update ($set/$pull)를 사용하면 write latency 와 document contention 을 줄일 수 있다.
             messageRepository.save(message);
 
             MessageReactionResponse response = new MessageReactionResponse(

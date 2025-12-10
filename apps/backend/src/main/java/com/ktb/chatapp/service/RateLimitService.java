@@ -53,7 +53,7 @@ public class RateLimitService {
         Instant expiresAt = now.plus(window);
 
         try {
-            //TODO : find 후 setCount/save 를 나누지 말고 Mongo $inc 같은 원자 연산을 사용하면 동시 요청 시 경쟁 조건과 불필요한 round-trip 을 줄일 수 있다.
+            //TODO : 010 : find 후 setCount/save 를 나누지 말고 Mongo $inc 같은 원자 연산을 사용하면 동시 요청 시 경쟁 조건과 불필요한 round-trip 을 줄일 수 있다.
             RateLimit rateLimit = rateLimitStore.findByClientId(actualClientId).orElse(null);
             int currentCount = rateLimit != null ? rateLimit.getCount() : 0;
 
