@@ -5,8 +5,7 @@ on:
     branches: [ "main", "feature/be-cicd" ] # 또는 develop
     paths:
       - 'apps/backend/**'
-      - '.github/workflows/deploy-dev.yml'
-      - 'deploy.sh'
+  workflow_dispatch:
 
 jobs:
   deploy:
