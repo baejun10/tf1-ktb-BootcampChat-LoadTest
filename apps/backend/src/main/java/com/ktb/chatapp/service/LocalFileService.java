@@ -153,6 +153,7 @@ public class LocalFileService implements FileService {
     public Resource loadFileAsResource(String fileName, String requesterId) {
         try {
             // 1. 파일 조회
+            //TODO : 파일→메시지→방 순차 조회 대신 Mongo lookup 으로 한 번에 가져오면 다운로드당 DB round-trip 3회를 1회로 줄일 수 있다.
             File fileEntity = fileRepository.findByFilename(fileName)
                     .orElseThrow(() -> new RuntimeException("파일을 찾을 수 없습니다: " + fileName));
 
