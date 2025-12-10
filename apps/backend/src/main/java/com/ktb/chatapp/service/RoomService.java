@@ -28,6 +28,11 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class RoomService {
 
+    /**
+     * 채팅방 목록/생성/참여/헬스체크 로직을 담당하는 핵심 도메인 서비스.
+     * MongoRepository와 이벤트 퍼블리셔를 조합해 REST와 Socket.IO 양쪽에 동일한 상태를 전달한다.
+     */
+
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
@@ -227,6 +232,7 @@ public class RoomService {
             creator = userRepository.findById(room.getCreator()).orElse(null);
         }
 
+        //TODO : room participantIds 를 한 번에 로딩할 수 있도록 batch query 또는 projection 으로 N+1 조회를 제거하면 대규모 방 목록 조회가 빨라진다.
         List<User> participants = room.getParticipantIds().stream()
             .map(userRepository::findById)
             .filter(Optional::isPresent)
@@ -235,6 +241,7 @@ public class RoomService {
 
         // 최근 10분간 메시지 수 조회
         LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
+        //TODO : 방 목록 페이징 시 매번 countRecentMessagesByRoomId 를 호출하면 Mongo 쿼리가 방 개수만큼 발생하므로, aggregation 으로 일괄 조회하거나 캐시 레이어를 둬서 호출 빈도를 낮춰야 한다.
         long recentMessageCount = messageRepository.countRecentMessagesByRoomId(room.getId(), tenMinutesAgo);
 
         return RoomResponse.builder()

@@ -11,6 +11,10 @@ import org.springframework.stereotype.Component;
 
 import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.*;
 
+/**
+ * Spring ApplicationEvent를 받아 Socket.IO 채널로 bridge 해주는 어댑터.
+ * 세션 종료, 방 이벤트, AI 스트리밍 결과 등을 실시간으로 클라이언트에게 푸시한다.
+ */
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "socketio.enabled", havingValue = "true", matchIfMissing = true)

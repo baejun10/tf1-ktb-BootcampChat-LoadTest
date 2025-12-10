@@ -8,6 +8,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 배포된 API 엔드포인트 목록을 한 번에 보여주는 루트 엔드포인트.
+ * 모노레포 구조에서도 백엔드 기능 지도를 빠르게 파악할 수 있도록 정적 정보만 반환한다.
+ */
 @RestController
 @RequestMapping("/api")
 public class ApiInfoController {

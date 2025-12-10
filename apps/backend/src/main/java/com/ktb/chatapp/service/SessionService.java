@@ -16,6 +16,11 @@ import static com.ktb.chatapp.model.Session.SESSION_TTL;
 @RequiredArgsConstructor
 public class SessionService {
 
+    /**
+     * JWT에서 전달된 세션 정보를 검증·저장·폐기하는 중앙 세션 관리자.
+     * SessionStore 구현체(Mongo 등)에 의존해 단일 세션 정책과 TTL 연장을 수행한다.
+     */
+
     private final SessionStore sessionStore;
     public static final long SESSION_TTL_SEC = DurationStyle.detectAndParse(SESSION_TTL).getSeconds();
     private static final long SESSION_TIMEOUT = SESSION_TTL_SEC * 1000;
@@ -36,6 +41,7 @@ public class SessionService {
 
     public SessionCreationResult createSession(String userId, SessionMetadata metadata) {
         try {
+            //TODO : 로그인 때마다 deleteAll 을 호출하면 사용자당 높은 write load 가 발생하므로 sessionId 를 비교해 조건부 삭제하거나 TTL index 를 활용해 자연 만료시키는 방식으로 줄일 수 있다.
             // Remove all existing user sessions
             removeAllUserSessions(userId);
 

@@ -31,6 +31,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 채팅방 CRUD, 참여, 헬스체크를 제공하는 메인 REST 컨트롤러.
+ * 모든 공개 HTTP 요청에 대해 레이트 리밋과 캐시 전략을 조절해 프론트엔드가 안정적으로 방 목록을 소비하게 한다.
+ */
 @Tag(name = "채팅방 (Rooms)", description = "채팅방 생성 및 관리 API - 채팅방 목록 조회, 생성, 참여, 헬스체크")
 @Slf4j
 @RequiredArgsConstructor
@@ -282,11 +286,13 @@ public class RoomController {
     }
 
     private RoomResponse mapToRoomResponse(Room room, String name) {
+        //TODO : controller 계층에서도 참가자/메시지 통계를 위한 별도 쿼리를 반복하고 있으므로, RoomService 가 DTO 를 반환하게 만들어 한 번의 집계로 재사용하면 N+1 쿼리를 줄일 수 있다.
         User creator = userRepository.findById(room.getCreator()).orElse(null);
         if (creator == null) {
             throw new RuntimeException("Creator not found for room " + room.getId());
         }
         UserResponse creatorSummary = UserResponse.from(creator);
+        //TODO : participantIds 를 stream 으로 순차 조회하는 대신 `findAllById` 등 배치 API 를 사용하면 큰 방일수록 DB round-trip 을 줄일 수 있다.
         List<UserResponse> participantSummaries = room.getParticipantIds()
                 .stream()
                 .map(userRepository::findById).peek(optUser -> {
@@ -303,6 +309,7 @@ public class RoomController {
 
         // 최근 10분간 메시지 수 조회
         LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
+        //TODO : 동일 룸에 대한 recent message 카운트 계산이 controller/service 양쪽에서 중복되므로 캐시나 미리 계산된 메트릭으로 대체하면 CPU/DB 비용을 절감할 수 있다.
         long recentMessageCount = messageRepository.countRecentMessagesByRoomId(room.getId(), tenMinutesAgo);
 
         return RoomResponse.builder()

@@ -36,6 +36,7 @@ public class MessageReadStatusService {
                 .build();
         
         try {
+            //TODO : findAllById 후 메시지마다 save 를 호출하면 읽음 처리 시 write load 가 커지므로 Mongo bulk update($addToSet) 로 한 번에 처리하도록 개선하면 지연을 줄일 수 있다.
             List<Message> messagesToUpdate = messageRepository.findAllById(messageIds);
             for (Message message : messagesToUpdate) {
                 if (message.getReaders() == null) {

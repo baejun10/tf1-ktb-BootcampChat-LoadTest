@@ -54,6 +54,7 @@ public class MessageResponseMapper {
         }
 
         // 파일 정보 설정
+        //TODO : fileRepository.findById 는 메시지마다 개별 쿼리를 발행하므로, File join 이 필요한 경우 MessageRepository 단계에서 lookup 하거나 미리 캐시해 round-trip 을 줄여라.
         Optional.ofNullable(message.getFileId())
                 .flatMap(fileRepository::findById)
                 .map(file -> FileResponse.builder()
