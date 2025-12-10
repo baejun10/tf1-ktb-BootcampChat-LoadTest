@@ -5,7 +5,7 @@ on:
     branches: [ "main", "feature/be-cicd" ] # 또는 develop
     paths:
       - 'apps/backend/**'
-      - '.github/workflows/deploy-be.yml'  # 워크플로우 파일 변경 시에도 트리거
+      - '.github/workflows/deploy-be.yml'
   workflow_dispatch:
 
 jobs:
@@ -57,6 +57,7 @@ jobs:
         key: ${{ secrets.SSH_PEM_KEY }}
         source: "apps/backend/deploy.sh"
         target: "/home/ubuntu/ktb-chat-backend/temp"
+        strip_components: 2
 
     # SSH 접속 및 스크립트 실행
     - name: Execute Deploy
