@@ -97,7 +97,9 @@ jobs:
               else
                 pm2 start server.js --name 'chat-frontend'
               fi
-              
+              # Ensure pm2 restarts on reboot
+              pm2 startup systemd 
+              # Save the pm2 process list
               pm2 save
             "
           done
