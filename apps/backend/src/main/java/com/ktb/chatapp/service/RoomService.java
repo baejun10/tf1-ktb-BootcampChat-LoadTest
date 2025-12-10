@@ -39,6 +39,8 @@ public class RoomService {
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
 
+    private static final LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
+
     public RoomsResponse getAllRoomsWithPagination(
             com.ktb.chatapp.dto.PageRequest pageRequest, String name) {
 
@@ -78,9 +80,20 @@ public class RoomService {
                 roomPage = roomRepository.findAll(springPageRequest);
             }
 
+            List<String> roomIds = roomPage.getContent().stream()
+                    .map(Room::getId)
+                    .toList();
+
+            // Room의 최근 10분간 메시지 수 조회
+            Map<String, Long> recentMessageCountMap = messageRepository.countRecentMessagesByRoomIds(roomIds, tenMinutesAgo).stream()
+                    .collect(Collectors.toMap(
+                            RoomMessageCount::getRoomId,
+                            RoomMessageCount::getCount
+                    ));
+
             // Room을 RoomResponse로 변환
             List<RoomResponse> roomResponses = roomPage.getContent().stream()
-                .map(room -> mapToRoomResponse(room, name))
+                .map(room -> mapToRoomResponse(room, name, recentMessageCountMap.getOrDefault(room.getId(), 0L)))
                 .collect(Collectors.toList());
 
             // 메타데이터 생성
@@ -174,9 +187,11 @@ public class RoomService {
 
         Room savedRoom = roomRepository.save(room);
 
+        // 새로 생성한 룸에는 채팅이 없음
+        RoomResponse roomResponse = mapToRoomResponse(savedRoom, name, 0L);
+
         // Publish event for room created
         try {
-            RoomResponse roomResponse = mapToRoomResponse(savedRoom, name);
             eventPublisher.publishEvent(new RoomCreatedEvent(this, roomResponse));
         } catch (Exception e) {
             log.error("roomCreated 이벤트 발행 실패", e);
@@ -214,9 +229,11 @@ public class RoomService {
             room = roomRepository.save(room);
         }
 
+        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(room.getId(), tenMinutesAgo);
+        RoomResponse roomResponse = mapToRoomResponse(room, name, recentMessageCount);
+
         // Publish event for room updated
         try {
-            RoomResponse roomResponse = mapToRoomResponse(room, name);
             eventPublisher.publishEvent(new RoomUpdatedEvent(this, roomId, roomResponse));
         } catch (Exception e) {
             log.error("roomUpdate 이벤트 발행 실패", e);
@@ -225,7 +242,7 @@ public class RoomService {
         return room;
     }
 
-    private RoomResponse mapToRoomResponse(Room room, String name) {
+    private RoomResponse mapToRoomResponse(Room room, String name, long recentMessageCount) {
         if (room == null) return null;
 
         User creator = null;
@@ -237,10 +254,7 @@ public class RoomService {
         // -> MongoDB의 $in 연산자를 사용해 배치 쿼리 1번만 실행합니다.
         List<User> participants = userRepository.findByIdIn(room.getParticipantIds());
 
-        // 최근 10분간 메시지 수 조회
-        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
         //TODO : 002 : 방 목록 페이징 시 매번 countRecentMessagesByRoomId 를 호출하면 Mongo 쿼리가 방 개수만큼 발생하므로, aggregation 으로 일괄 조회하거나 캐시 레이어를 둬서 호출 빈도를 낮춰야 한다.
-        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(room.getId(), tenMinutesAgo);
 
         return RoomResponse.builder()
             .id(room.getId())
