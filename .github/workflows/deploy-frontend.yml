@@ -90,11 +90,7 @@ jobs:
               
               # Optional: npm install if native modules need rebuilding or some are missing
               # Standalone usually includes node_modules, but verified
-              
-              # npm install --production 
-              
-              # PM2 Restart
-              npm install -g pm2
+              # sudo npm install --production 
 
               if pm2 list | grep -q 'chat-frontend'; then
                 pm2 restart chat-frontend --update-env
