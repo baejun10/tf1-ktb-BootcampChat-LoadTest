@@ -64,7 +64,7 @@ jobs:
       - name: Deploy to All Servers
         run: |
           # Split comma-separated hosts into an array
-          IFS=',' read -ra HOSTS <<< "${{ secrets.AWS_FE_SERVER_HOSTS }}"
+          IFS=',' read -ra HOSTS <<< "${{ vars.AWS_FE_SERVER_HOSTS }}"
           
           for host in "${HOSTS[@]}"; do
             # Trim whitespace just in case
@@ -89,9 +89,12 @@ jobs:
               
               # Optional: npm install if native modules need rebuilding or some are missing
               # Standalone usually includes node_modules, but verified
+              
               # npm install --production 
               
               # PM2 Restart
+              npm install -g pm2
+
               if pm2 list | grep -q 'chat-frontend'; then
                 pm2 restart chat-frontend --update-env
               else
