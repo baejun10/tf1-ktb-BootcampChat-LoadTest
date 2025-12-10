@@ -76,22 +76,26 @@ public class MessageLoader {
             int limit,
             LocalDateTime before,
             String userId) {
+        /// 페이징 설정 (timestamp 내림차순으로 최신 메시지부터 조회)
         Pageable pageable = PageRequest.of(0, limit, Sort.by("timestamp").descending());
 
+        /// 2. DB에서 메시지 조회 (roomId, isDeleted=false, timestamp < before 조건)
         Page<Message> messagePage = messageRepository
                 .findByRoomIdAndIsDeletedAndTimestampBefore(roomId, false, before, pageable);
 
         List<Message> messages = messagePage.getContent();
 
+        /// 메시지 순서 재정렬 (DESC → ASC: 채팅 UI는 오래된 메시지가 위에 표시)
         // DESC로 조회했으므로 ASC로 재정렬 (채팅 UI 표시 순서)
         List<Message> sortedMessages = messages.reversed();
         
         var messageIds = sortedMessages.stream().map(Message::getId).toList();
+
+        //TODO : 022 : messageReadStatusService.updateReadStatus 를 비동기(@Async)로 처리하면 메시지 로드 응답 속도를 개선할 수 있다 (읽음 상태는 eventual consistency 허용 가능)
         messageReadStatusService.updateReadStatus(messageIds, userId);
 
         //TODO : 014 : 메시지 송신자 정보를 메시지 목록과 함께 batch 로딩하거나 projection 으로 합쳐 가져오면 메시지 수만큼 userRepository.findById 를 호출하는 N+1 문제를 줄일 수 있다.
-        //TODO : 022 : sortedMessages 를 stream() 으로 2번 순회하는 대신, 한 번의 순회로 messageIds 추출과 MessageResponse 생성을 동시에 처리하면 성능 개선 가능 (미미한 개선이지만 코드 간결화)
-        //TODO : 023 : messageReadStatusService.updateReadStatus 를 비동기(@Async)로 처리하면 메시지 로드 응답 속도를 개선할 수 있다 (읽음 상태는 eventual consistency 허용 가능)
+        //TODO : 023 : sortedMessages 를 stream() 으로 2번 순회하는 대신, 한 번의 순회로 messageIds 추출과 MessageResponse 생성을 동시에 처리하면 성능 개선 가능 (미미한 개선이지만 코드 간결화)
         List<MessageResponse> messageResponses = sortedMessages.stream()
                 .map(message -> {
                     var user = findUserById(message.getSenderId());
