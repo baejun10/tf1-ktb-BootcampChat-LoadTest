@@ -5,6 +5,7 @@ on:
     branches: [ "main", "feature/be-cicd" ] # 또는 develop
     paths:
       - 'apps/backend/**'
+      - '.github/workflows/deploy-be.yml'  # 워크플로우 파일 변경 시에도 트리거
   workflow_dispatch:
 
 jobs:
