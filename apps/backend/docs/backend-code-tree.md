@@ -97,6 +97,92 @@ L-- uploads/ ................ LocalFileService 기본 저장소 (gitignore 대�
 
 ---
 
+## 3. 패키지별 주요 클래스 역할
+
+### 3.1 `controller`
+- `ApiInfoController` — 배포된 API 맵을 JSON으로 노출.
+- `AuthController` — 회원가입/로그인/토큰 검증·갱신/로그아웃·세션 종료.
+- `CustomErrorController` — `/error` 응답을 JSON 포맷으로 통일하고 dev 프로파일에서 stack 노출.
+- `FileController` — 파일 업로드·다운로드·뷰·삭제, 권한 및 파일명 검증.
+- `HealthController` — `/api/health` 헬스체크(상태, 타임스탬프, 프로파일).
+- `MessageController` — REST 메시지 엔드포인트가 미구현임을 알리고 Socket 사용 유도.
+- `RoomController` — 방 목록·생성·참여·헬스체크·통계, RateLimit 적용.
+- `UserController` — 내 프로필 조회·수정, 이미지 업로드/삭제, 회원 탈퇴.
+- `StatusResponse`, `UserApiResponse`, `UserUpdateResponse` — 컨트롤러 전용 래퍼 응답 DTO.
+
+### 3.2 `config`
+- `BannedWordConfig` — 금칙어 파일 로딩, `BannedWordChecker` 빈 등록.
+- `JwtConfig` — JwtEncoder/JwtDecoder, 만료 토큰 디코더, 커스텀 Validator.
+- `MongoConfig` — MongoTemplate, 인덱스 준비.
+- `OpenApiConfig` — Swagger/OpenAPI 문서 및 공통 응답 스키마.
+- `RateLimitInterceptor` — @RateLimit 애너테이션 처리.
+- `RequestLoggingFilter` — HTTP 요청 메타데이터 로그.
+- `SecurityConfig` — Spring Security 리소스 서버, CORS, 세션/헤더 정책.
+- `SocketIOConfig` — SocketIOServer, 인증 리졸버, 메모리 스토어 설정.
+- `WebMvcConfig` — RateLimitInterceptor 등록, 정적 리소스 핸들링.
+- `JwtConfig#expiredTokenDecoder` bean 등 세부 부가 설정 클래스 포함.
+
+### 3.3 `annotation`
+- `RateLimit` — 메서드 레벨 RateLimit 메타데이터 정의.
+
+### 3.4 `dto`
+- **인증/사용자**: `AuthUserDto`, `LoginRequest`, `LoginResponse`, `RegisterRequest`, `TokenVerifyResponse`, `TokenRefreshResponse`, `UserResponse`, `UpdateProfileRequest`, `UserApiResponse`, `UserUpdateResponse`, `ProfileImageResponse`.
+- **방/메시지 REST**: `CreateRoomRequest`, `JoinRoomRequest`, `JoinRoomSuccessResponse`, `RoomResponse`, `RoomsResponse`, `PageRequest`, `PageMetadata`, `ChatMessageRequest`, `FetchMessagesRequest`, `FetchMessagesResponse`, `MessageResponse`, `MessageContent`, `MessagesReadResponse`, `MessageReactionRequest/Response`, `MarkAsReadRequest`, `ActiveStreamResponse`.
+- **공통 응답**: `StandardResponse`, `ErrorResponse`, `ValidationError`, `ApiErrorCode`, `StatusResponse`.
+- **파일**: `FileResponse`.
+- 기타: `TokenVerifyResponse`, `TokenRefreshResponse`, `HealthResponse`, `RoomResponse`, `RoomResponse`.
+
+### 3.5 `event`
+- `RoomCreatedEvent`, `RoomUpdatedEvent` — 방 변동 사항을 Socket.IO로 브로드캐스트.
+- `SessionEndedEvent` — 강제 로그아웃 통지.
+- `AiMessageStartEvent`, `AiMessageChunkEvent`, `AiMessageCompleteEvent`, `AiMessageSavedEvent`, `AiMessageErrorEvent` — AI 스트리밍 lifecycle.
+
+### 3.6 `exception`
+- `GlobalExceptionHandler` — REST 전역 예외 처리, Validation/Business 에러 분기.
+- `SessionExpiredException` — 세션 만료 상황에서 throw.
+
+### 3.7 `model`
+- `User` — 이름/이메일(암호화)/비밀번호/프로필 이미지/타임스탬프.
+- `Room` — 방 메타데이터, 참가자 목록, 비밀번호 정보.
+- `Message` — 메시지 본문, 타입, 파일/AI/읽음 상태, 메타데이터.
+- `MessageType` — text/file/ai/system 등 타입 enum.
+- `File` — 파일 경로/크기/사용자/업로드 시각.
+- `Session` — userId, sessionId, TTL, lastActivity.
+- `RateLimit` — clientId별 요청 횟수와 만료 시각.
+- `AiType` — AI 페르소나 enum(wayneAI, consultingAI 등).
+
+### 3.8 `repository`
+- `UserRepository`, `RoomRepository`, `MessageRepository`, `FileRepository`, `SessionRepository`, `RateLimitRepository` — MongoCollection별 CRUD 및 커스텀 쿼리.
+
+### 3.9 `security`
+- `CustomBearerTokenResolver` — x-auth-token → query → Authorization 순으로 토큰 추출.
+- `SessionAwareJwtAuthenticationConverter` — JWT에서 userId/sessionId를 ValidationResult와 함께 Authentication으로 변환.
+
+### 3.10 `service`
+- **공통/지원**: `JwtService`, `UserDetailsServiceImpl`, `MessageReadStatusService`, `FileService`(interface), `FileUploadResult`.
+- **사용자·파일**: `UserService` — 프로필 관리 및 이미지 업로드/삭제; `LocalFileService` — FileService 구현체, 저장/다운로드/삭제.
+- **세션**: `SessionService`, `SessionData`, `SessionMetadata`, `SessionCreationResult`, `SessionValidationResult`, `service/session/SessionStore`, `service/session/SessionMongoStore`.
+- **레이트리밋**: `RateLimitService`, `RateLimitCheckResult`, `service/ratelimit/RateLimitStore`, `RateLimitMongoStore`.
+- **채팅방**: `RoomService` — 방 CRUD·헬스체크·이벤트 발행.
+- **AI/Socket 연동**: `websocket/socketio/ai/AiService` — Spring AI 호출, 이벤트 발행; `AiStreamHandler`, `ChunkData`.
+
+### 3.11 `util`
+- `BannedWordChecker` — 금칙어 탐지.
+- `EncryptionUtil` — 이메일 암호화/복호화.
+- `FileUtil` — 파일 검증, 안전 파일명, 경로 검증.
+
+### 3.12 `validation`
+- 애너테이션: `ValidEmail`, `ValidName`, `ValidPassword`.
+- 구현체: `EmailValidator`, `NameValidator`, `PasswordValidator`.
+
+### 3.13 `websocket/socketio`
+- **핵심 객체**: `SocketIOEvents`(이벤트 상수), `SocketUser`, `ConnectedUsers`, `UserRooms`, `ChatDataStore`, `LocalChatDataStore`, `SocketIOEventListener`.
+- **핸들러**: `handler/ConnectionLoginHandler`, `RoomJoinHandler`, `RoomLeaveHandler`, `MessageFetchHandler`, `MessageLoader`, `MessageResponseMapper`, `ChatMessageHandler`, `MessageReadHandler`, `MessageReactionHandler`, `StreamingSession`.
+- **AI 연동**: `ai/AiService`, `AiStreamHandler`, `ChunkData`.
+- **Auth**: `socketio/AuthTokenListenerImpl` — 핸드셰이크 시 토큰 검증, 사용자 로드.
+
+---
+
 ## 3. 사용 가이드
 1. **엔드포인트 찾기** — 원하는 REST 기능은 `controller/` 하위와 동일 이름의 `service/` 에서 비즈니스 로직을 찾을 수 있습니다.
 2. **실시간 흐름** — Socket.IO 이벤트는 `websocket/socketio/handler`에서 시작해 `AiService`나 `RoomService` 같은 도메인 서비스로 이어집니다.
