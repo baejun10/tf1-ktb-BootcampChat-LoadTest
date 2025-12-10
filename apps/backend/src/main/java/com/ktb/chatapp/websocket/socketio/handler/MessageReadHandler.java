@@ -58,7 +58,7 @@ public class MessageReadHandler {
                 return;
             }
 
-            //TODO : 015 세션 검증 과정에서 이미 사용자 정보를 보유하고 있으므로 userRepository.findById 호출을 캐시하거나 skip 하면 읽음 이벤트 처리 지연을 줄일 수 있다.
+            //TODO : 015 : 세션 검증 과정에서 이미 사용자 정보를 보유하고 있으므로 userRepository.findById 호출을 캐시하거나 skip 하면 읽음 이벤트 처리 지연을 줄일 수 있다.
             User user = userRepository.findById(userId).orElse(null);
             if (user == null) {
                 client.sendEvent(ERROR, Map.of("message", "User not found"));
