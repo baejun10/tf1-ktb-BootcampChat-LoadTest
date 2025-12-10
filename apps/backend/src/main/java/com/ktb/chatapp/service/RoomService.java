@@ -208,6 +208,7 @@ public class RoomService {
 
         // 이미 참여중인지 확인
         if (!room.getParticipantIds().contains(user.getId())) {
+            //TODO : 참가자 추가를 전체 Room 문서를 읽고 저장하는 대신 Mongo $addToSet 업데이트로 처리하면 경합과 write volume 을 줄일 수 있다.
             // 채팅방 참여
             room.getParticipantIds().add(user.getId());
             room = roomRepository.save(room);
