@@ -134,13 +134,12 @@ public class RoomJoinHandler {
             }
 
             // 참가자 정보 조회
-            //TODO : 020 : 참가자 정보를 매번 userRepository.findById 로 순차 조회하는 대신 findAllById 또는 Redis 캐시를 사용해 대규모 방의 참가자 리스트 응답 시간을 줄일 수 있다.
+            //TODO : 020 : 참가자 정보를 매번 userRepository.findById 로 순차 조회하는 대신 findAllById 또는 Redis 캐시를 사용해 대규모 방의 참가자 리스트 응답 시간을 줄일 수 있다. -> 100명 이상 대규모 방에서는 추가 최적화 필요 (TODO 020: 캐싱 + Projection)
+
             //TODO : 024 : Stream에서 map(userRepository::findById)는 참가자 수만큼 DB 쿼리를 발생시키므로 N+1 문제가 발생한다. userRepository.findAllById()로 batch 조회하라.
-            List<UserResponse> participants = roomOpt.get().getParticipantIds()
+            /// [개선 024] Batch loading으로 참가자 N+1 문제 해결: N회 쿼리 → 1회 쿼리
+            List<UserResponse> participants = userRepository.findAllById(roomOpt.get().getParticipantIds())
                     .stream()
-                    .map(userRepository::findById)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
                     .map(UserResponse::from)
                     .toList();
             
