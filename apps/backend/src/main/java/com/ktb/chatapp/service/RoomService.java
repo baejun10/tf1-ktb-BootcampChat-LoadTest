@@ -171,7 +171,7 @@ public class RoomService {
         }
     }
 
-    public Room createRoom(CreateRoomRequest createRoomRequest, String name) {
+    public RoomResponse createRoom(CreateRoomRequest createRoomRequest, String name) {
         User creator = userRepository.findByEmail(name)
             .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + name));
 
@@ -197,14 +197,18 @@ public class RoomService {
             log.error("roomCreated 이벤트 발행 실패", e);
         }
 
-        return savedRoom;
+        return roomResponse;
     }
 
-    public Optional<Room> findRoomById(String roomId) {
-        return roomRepository.findById(roomId);
+    public RoomResponse findRoomById(String roomId, String name) {
+        Room room = roomRepository.findById(roomId).orElse(null);
+
+        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(roomId, tenMinutesAgo);
+
+        return mapToRoomResponse(room, name, recentMessageCount);
     }
 
-    public Room joinRoom(String roomId, String password, String name) {
+    public RoomResponse joinRoom(String roomId, String password, String name) {
         Optional<Room> roomOpt = roomRepository.findById(roomId);
         if (roomOpt.isEmpty()) {
             return null;
@@ -239,7 +243,7 @@ public class RoomService {
             log.error("roomUpdate 이벤트 발행 실패", e);
         }
 
-        return room;
+        return roomResponse;
     }
 
     private RoomResponse mapToRoomResponse(Room room, String name, long recentMessageCount) {

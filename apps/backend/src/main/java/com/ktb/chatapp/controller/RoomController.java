@@ -2,8 +2,6 @@ package com.ktb.chatapp.controller;
 
 import com.ktb.chatapp.annotation.RateLimit;
 import com.ktb.chatapp.dto.*;
-import com.ktb.chatapp.model.Room;
-import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.RoomService;
@@ -19,10 +17,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.time.Duration;
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -169,8 +164,7 @@ public class RoomController {
                 );
             }
 
-            Room savedRoom = roomService.createRoom(createRoomRequest, principal.getName());
-            RoomResponse roomResponse = mapToRoomResponse(savedRoom, principal.getName());
+            RoomResponse roomResponse = roomService.createRoom(createRoomRequest, principal.getName());
 
             return ResponseEntity.status(201).body(
                 Map.of(
@@ -208,15 +202,12 @@ public class RoomController {
     @GetMapping("/{roomId}")
     public ResponseEntity<?> getRoomById(@Parameter(description = "채팅방 ID", example = "60d5ec49f1b2c8b9e8c4f2a1") @PathVariable String roomId, Principal principal) {
         try {
-            Optional<Room> roomOpt = roomService.findRoomById(roomId);
-            if (roomOpt.isEmpty()) {
+            RoomResponse roomResponse = roomService.findRoomById(roomId, principal.getName());
+            if (roomResponse == null) {
                 return ResponseEntity.status(404).body(
                     StandardResponse.error("채팅방을 찾을 수 없습니다.")
                 );
             }
-
-            Room room = roomOpt.get();
-            RoomResponse roomResponse = mapToRoomResponse(room, principal.getName());
 
             return ResponseEntity.ok(
                 Map.of(
@@ -253,15 +244,13 @@ public class RoomController {
             @RequestBody JoinRoomRequest joinRoomRequest,
             Principal principal) {
         try {
-            Room joinedRoom = roomService.joinRoom(roomId, joinRoomRequest.getPassword(), principal.getName());
+            RoomResponse roomResponse = roomService.joinRoom(roomId, joinRoomRequest.getPassword(), principal.getName());
 
-            if (joinedRoom == null) {
+            if (roomResponse == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(StandardResponse.error("채팅방을 찾을 수 없습니다."));
             }
 
-            RoomResponse roomResponse = mapToRoomResponse(joinedRoom, principal.getName());
-            
             return ResponseEntity.ok(
                 Map.of(
                     "success", true,
@@ -283,44 +272,5 @@ public class RoomController {
                 StandardResponse.error("채팅방 참여에 실패했습니다.")
             );
         }
-    }
-
-    private RoomResponse mapToRoomResponse(Room room, String name) {
-        //TODO : 005 : controller 계층에서도 참가자/메시지 통계를 위한 별도 쿼리를 반복하고 있으므로, RoomService 가 DTO 를 반환하게 만들어 한 번의 집계로 재사용하면 N+1 쿼리를 줄일 수 있다.
-        User creator = userRepository.findById(room.getCreator()).orElse(null);
-        if (creator == null) {
-            throw new RuntimeException("Creator not found for room " + room.getId());
-        }
-        UserResponse creatorSummary = UserResponse.from(creator);
-        //TODO : 006 : participantIds 를 stream 으로 순차 조회하는 대신 `findAllById` 등 배치 API 를 사용하면 큰 방일수록 DB round-trip 을 줄일 수 있다.
-        List<UserResponse> participantSummaries = room.getParticipantIds()
-                .stream()
-                .map(userRepository::findById).peek(optUser -> {
-                    if (optUser.isEmpty()) {
-                        log.warn("Participant not found: roomId={}, userId={}", room.getId(), optUser);
-                    }
-                })
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(UserResponse::from)
-                .toList();
-
-        boolean isCreator = room.getCreator().equals(name);
-
-        // 최근 10분간 메시지 수 조회
-        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
-        //TODO : 007 : 동일 룸에 대한 recent message 카운트 계산이 controller/service 양쪽에서 중복되므로 캐시나 미리 계산된 메트릭으로 대체하면 CPU/DB 비용을 절감할 수 있다.
-        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(room.getId(), tenMinutesAgo);
-
-        return RoomResponse.builder()
-                .id(room.getId())
-                .name(room.getName())
-                .hasPassword(room.isHasPassword())
-                .creator(creatorSummary)
-                .participants(participantSummaries)
-                .createdAtDateTime(room.getCreatedAt() != null ? room.getCreatedAt() : LocalDateTime.now())
-                .isCreator(isCreator)
-                .recentMessageCount((int) recentMessageCount)
-                .build();
     }
 }
