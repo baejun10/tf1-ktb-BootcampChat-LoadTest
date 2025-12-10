@@ -15,7 +15,7 @@ Next.js 기반의 실시간 채팅 애플리케이션 프론트엔드입니다.
 - npm 또는 yarn
 
 ## CD
-CD는 GitHub Actions를 사용하여 자동화됩니다.
+CD는 GitHub Actions를 사용하여 자동화됩니다. 
 
 ## 설치 및 실행
 
