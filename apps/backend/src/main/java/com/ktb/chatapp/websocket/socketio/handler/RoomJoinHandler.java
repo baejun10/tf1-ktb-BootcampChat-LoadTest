@@ -13,7 +13,6 @@ import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
-import com.ktb.chatapp.service.FileCacheService;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.websocket.socketio.UserRooms;
 import java.time.LocalDateTime;
@@ -49,7 +48,6 @@ public class RoomJoinHandler {
     private final UserRooms userRooms;
     private final MessageLoader messageLoader;
     private final MessageResponseMapper messageResponseMapper;
-    private final FileCacheService fileCacheService;
     private final RoomLeaveHandler roomLeaveHandler;
 
 
@@ -154,13 +152,8 @@ public class RoomJoinHandler {
             client.sendEvent(JOIN_ROOM_SUCCESS, response);
 
             // 입장 메시지 브로드캐스트
-            /// [개선 018] : mapToMessageResponse을 사용하는 곳으로 파일 캐싱으로 해결
             socketIOServer.getRoomOperations(roomId)
-                .sendEvent(MESSAGE, messageResponseMapper.mapToMessageResponse(
-                        joinMessage,
-                        null,
-                        fileCacheService.getFile(joinMessage.getFileId()).orElse(null)
-                ));
+                .sendEvent(MESSAGE, messageResponseMapper.mapToMessageResponse(joinMessage, null));
 
             // 참가자 목록 업데이트 브로드캐스트
             socketIOServer.getRoomOperations(roomId)

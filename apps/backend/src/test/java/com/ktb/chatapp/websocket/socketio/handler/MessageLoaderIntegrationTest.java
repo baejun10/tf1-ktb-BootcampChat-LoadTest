@@ -9,7 +9,6 @@ import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.UserRepository;
-import com.ktb.chatapp.service.FileCacheService;
 import com.ktb.chatapp.service.MessageReadStatusService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -47,9 +46,6 @@ class MessageLoaderIntegrationTest {
     @Autowired
     private FileRepository fileRepository;
 
-    @Autowired
-    private FileCacheService fileCacheService;
-
     @MockitoSpyBean
     private MessageReadStatusService messageReadStatusService;
 
@@ -68,8 +64,7 @@ class MessageLoaderIntegrationTest {
         messageLoader = new MessageLoader(
                 messageRepository,
                 userRepository,
-                new MessageResponseMapper(),
-                fileCacheService,
+                new MessageResponseMapper(fileRepository),
                 messageReadStatusService
         );
 
