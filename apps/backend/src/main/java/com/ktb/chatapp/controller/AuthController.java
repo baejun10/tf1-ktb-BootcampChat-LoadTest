@@ -37,6 +37,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 인증·인가 흐름 전체를 묶는 REST 컨트롤러.
+ * 회원가입/로그인/로그아웃뿐 아니라 토큰 검증, 재발급과 세션 강제 종료까지 한 곳에서 처리한다.
+ */
 @Tag(name = "인증 (Authentication)", description = "사용자 인증 관련 API - 회원가입, 로그인, 로그아웃, 토큰 관리")
 @Slf4j
 @RequiredArgsConstructor

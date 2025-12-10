@@ -27,6 +27,11 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class LocalFileService implements FileService {
 
+    /**
+     * 로컬 디스크를 스토리지로 사용하는 FileService 구현체.
+     * 업로드/다운로드 시 파일명 위변조, 경로 탈출, 방 참가 권한을 모두 검증한다.
+     */
+
     private final Path fileStorageLocation;
     private final FileRepository fileRepository;
     private final MessageRepository messageRepository;
@@ -148,6 +153,7 @@ public class LocalFileService implements FileService {
     public Resource loadFileAsResource(String fileName, String requesterId) {
         try {
             // 1. 파일 조회
+            //TODO : 008 : 파일→메시지→방 순차 조회 대신 Mongo lookup 으로 한 번에 가져오면 다운로드당 DB round-trip 3회를 1회로 줄일 수 있다.
             File fileEntity = fileRepository.findByFilename(fileName)
                     .orElseThrow(() -> new RuntimeException("파일을 찾을 수 없습니다: " + fileName));
 

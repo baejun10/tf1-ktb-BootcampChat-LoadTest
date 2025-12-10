@@ -28,11 +28,18 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class RoomService {
 
+    /**
+     * 채팅방 목록/생성/참여/헬스체크 로직을 담당하는 핵심 도메인 서비스.
+     * MongoRepository와 이벤트 퍼블리셔를 조합해 REST와 Socket.IO 양쪽에 동일한 상태를 전달한다.
+     */
+
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
+
+    private static final LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
 
     public RoomsResponse getAllRoomsWithPagination(
             com.ktb.chatapp.dto.PageRequest pageRequest, String name) {
@@ -73,9 +80,20 @@ public class RoomService {
                 roomPage = roomRepository.findAll(springPageRequest);
             }
 
+            List<String> roomIds = roomPage.getContent().stream()
+                    .map(Room::getId)
+                    .toList();
+
+            // Room의 최근 10분간 메시지 수 조회
+            Map<String, Long> recentMessageCountMap = messageRepository.countRecentMessagesByRoomIds(roomIds, tenMinutesAgo).stream()
+                    .collect(Collectors.toMap(
+                            RoomMessageCount::getRoomId,
+                            RoomMessageCount::getCount
+                    ));
+
             // Room을 RoomResponse로 변환
             List<RoomResponse> roomResponses = roomPage.getContent().stream()
-                .map(room -> mapToRoomResponse(room, name))
+                .map(room -> mapToRoomResponse(room, name, recentMessageCountMap.getOrDefault(room.getId(), 0L)))
                 .collect(Collectors.toList());
 
             // 메타데이터 생성
@@ -153,7 +171,7 @@ public class RoomService {
         }
     }
 
-    public Room createRoom(CreateRoomRequest createRoomRequest, String name) {
+    public RoomResponse createRoom(CreateRoomRequest createRoomRequest, String name) {
         User creator = userRepository.findByEmail(name)
             .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + name));
 
@@ -168,23 +186,29 @@ public class RoomService {
         }
 
         Room savedRoom = roomRepository.save(room);
-        
+
+        // 새로 생성한 룸에는 채팅이 없음
+        RoomResponse roomResponse = mapToRoomResponse(savedRoom, name, 0L);
+
         // Publish event for room created
         try {
-            RoomResponse roomResponse = mapToRoomResponse(savedRoom, name);
             eventPublisher.publishEvent(new RoomCreatedEvent(this, roomResponse));
         } catch (Exception e) {
             log.error("roomCreated 이벤트 발행 실패", e);
         }
-        
-        return savedRoom;
+
+        return roomResponse;
     }
 
-    public Optional<Room> findRoomById(String roomId) {
-        return roomRepository.findById(roomId);
+    public RoomResponse findRoomById(String roomId, String name) {
+        Room room = roomRepository.findById(roomId).orElse(null);
+
+        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(roomId, tenMinutesAgo);
+
+        return mapToRoomResponse(room, name, recentMessageCount);
     }
 
-    public Room joinRoom(String roomId, String password, String name) {
+    public RoomResponse joinRoom(String roomId, String password, String name) {
         Optional<Room> roomOpt = roomRepository.findById(roomId);
         if (roomOpt.isEmpty()) {
             return null;
@@ -203,23 +227,26 @@ public class RoomService {
 
         // 이미 참여중인지 확인
         if (!room.getParticipantIds().contains(user.getId())) {
+            //TODO : 021 : 참가자 추가를 전체 Room 문서를 읽고 저장하는 대신 Mongo $addToSet 업데이트로 처리하면 경합과 write volume 을 줄일 수 있다.
             // 채팅방 참여
             room.getParticipantIds().add(user.getId());
             room = roomRepository.save(room);
         }
-        
+
+        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(room.getId(), tenMinutesAgo);
+        RoomResponse roomResponse = mapToRoomResponse(room, name, recentMessageCount);
+
         // Publish event for room updated
         try {
-            RoomResponse roomResponse = mapToRoomResponse(room, name);
             eventPublisher.publishEvent(new RoomUpdatedEvent(this, roomId, roomResponse));
         } catch (Exception e) {
             log.error("roomUpdate 이벤트 발행 실패", e);
         }
 
-        return room;
+        return roomResponse;
     }
 
-    private RoomResponse mapToRoomResponse(Room room, String name) {
+    private RoomResponse mapToRoomResponse(Room room, String name, long recentMessageCount) {
         if (room == null) return null;
 
         User creator = null;
@@ -227,15 +254,11 @@ public class RoomService {
             creator = userRepository.findById(room.getCreator()).orElse(null);
         }
 
-        List<User> participants = room.getParticipantIds().stream()
-            .map(userRepository::findById)
-            .filter(Optional::isPresent)
-            .map(Optional::get)
-            .toList();
+        //TODO : 001 : room participantIds 를 한 번에 로딩할 수 있도록 batch query 또는 projection 으로 N+1 조회를 제거하면 대규모 방 목록 조회가 빨라진다.
+        // -> MongoDB의 $in 연산자를 사용해 배치 쿼리 1번만 실행합니다.
+        List<User> participants = userRepository.findByIdIn(room.getParticipantIds());
 
-        // 최근 10분간 메시지 수 조회
-        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
-        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(room.getId(), tenMinutesAgo);
+        //TODO : 002 : 방 목록 페이징 시 매번 countRecentMessagesByRoomId 를 호출하면 Mongo 쿼리가 방 개수만큼 발생하므로, aggregation 으로 일괄 조회하거나 캐시 레이어를 둬서 호출 빈도를 낮춰야 한다.
 
         return RoomResponse.builder()
             .id(room.getId())

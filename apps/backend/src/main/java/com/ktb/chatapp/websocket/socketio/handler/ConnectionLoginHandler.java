@@ -136,7 +136,7 @@ public class ConnectionLoginHandler {
     }
     
     /**
-     * TODO 멀티 클러스터에서 동작 안함 다중 노드의 경우 다른  노드에 접속된 사용자는 통보 불가함
+     * TODO : 013 : 멀티 클러스터에서 동작 안함 다중 노드의 경우 다른  노드에 접속된 사용자는 통보 불가함
      * socketIOServer.getRoomOperations("user:" + userId) 로 처리 변경.
      */
     private void notifyDuplicateLogin(SocketIOClient client, String userId) {

@@ -30,6 +30,10 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * 업로드된 파일 메타데이터를 기반으로 저장·다운로드 권한을 검증하는 컨트롤러.
+ * REST API 단에서 인증 사용자와 파일/메시지 소유자 일치 여부를 재확인하여 파일 탈취를 막는다.
+ */
 @Tag(name = "파일 (Files)", description = "파일 업로드 및 다운로드 API")
 @Slf4j
 @RequiredArgsConstructor

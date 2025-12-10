@@ -2,8 +2,6 @@ package com.ktb.chatapp.controller;
 
 import com.ktb.chatapp.annotation.RateLimit;
 import com.ktb.chatapp.dto.*;
-import com.ktb.chatapp.model.Room;
-import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.RoomService;
@@ -19,10 +17,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.time.Duration;
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +26,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 채팅방 CRUD, 참여, 헬스체크를 제공하는 메인 REST 컨트롤러.
+ * 모든 공개 HTTP 요청에 대해 레이트 리밋과 캐시 전략을 조절해 프론트엔드가 안정적으로 방 목록을 소비하게 한다.
+ */
 @Tag(name = "채팅방 (Rooms)", description = "채팅방 생성 및 관리 API - 채팅방 목록 조회, 생성, 참여, 헬스체크")
 @Slf4j
 @RequiredArgsConstructor
@@ -165,8 +164,7 @@ public class RoomController {
                 );
             }
 
-            Room savedRoom = roomService.createRoom(createRoomRequest, principal.getName());
-            RoomResponse roomResponse = mapToRoomResponse(savedRoom, principal.getName());
+            RoomResponse roomResponse = roomService.createRoom(createRoomRequest, principal.getName());
 
             return ResponseEntity.status(201).body(
                 Map.of(
@@ -204,15 +202,12 @@ public class RoomController {
     @GetMapping("/{roomId}")
     public ResponseEntity<?> getRoomById(@Parameter(description = "채팅방 ID", example = "60d5ec49f1b2c8b9e8c4f2a1") @PathVariable String roomId, Principal principal) {
         try {
-            Optional<Room> roomOpt = roomService.findRoomById(roomId);
-            if (roomOpt.isEmpty()) {
+            RoomResponse roomResponse = roomService.findRoomById(roomId, principal.getName());
+            if (roomResponse == null) {
                 return ResponseEntity.status(404).body(
                     StandardResponse.error("채팅방을 찾을 수 없습니다.")
                 );
             }
-
-            Room room = roomOpt.get();
-            RoomResponse roomResponse = mapToRoomResponse(room, principal.getName());
 
             return ResponseEntity.ok(
                 Map.of(
@@ -249,15 +244,13 @@ public class RoomController {
             @RequestBody JoinRoomRequest joinRoomRequest,
             Principal principal) {
         try {
-            Room joinedRoom = roomService.joinRoom(roomId, joinRoomRequest.getPassword(), principal.getName());
+            RoomResponse roomResponse = roomService.joinRoom(roomId, joinRoomRequest.getPassword(), principal.getName());
 
-            if (joinedRoom == null) {
+            if (roomResponse == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(StandardResponse.error("채팅방을 찾을 수 없습니다."));
             }
 
-            RoomResponse roomResponse = mapToRoomResponse(joinedRoom, principal.getName());
-            
             return ResponseEntity.ok(
                 Map.of(
                     "success", true,
@@ -279,41 +272,5 @@ public class RoomController {
                 StandardResponse.error("채팅방 참여에 실패했습니다.")
             );
         }
-    }
-
-    private RoomResponse mapToRoomResponse(Room room, String name) {
-        User creator = userRepository.findById(room.getCreator()).orElse(null);
-        if (creator == null) {
-            throw new RuntimeException("Creator not found for room " + room.getId());
-        }
-        UserResponse creatorSummary = UserResponse.from(creator);
-        List<UserResponse> participantSummaries = room.getParticipantIds()
-                .stream()
-                .map(userRepository::findById).peek(optUser -> {
-                    if (optUser.isEmpty()) {
-                        log.warn("Participant not found: roomId={}, userId={}", room.getId(), optUser);
-                    }
-                })
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(UserResponse::from)
-                .toList();
-
-        boolean isCreator = room.getCreator().equals(name);
-
-        // 최근 10분간 메시지 수 조회
-        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
-        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(room.getId(), tenMinutesAgo);
-
-        return RoomResponse.builder()
-                .id(room.getId())
-                .name(room.getName())
-                .hasPassword(room.isHasPassword())
-                .creator(creatorSummary)
-                .participants(participantSummaries)
-                .createdAtDateTime(room.getCreatedAt() != null ? room.getCreatedAt() : LocalDateTime.now())
-                .isCreator(isCreator)
-                .recentMessageCount((int) recentMessageCount)
-                .build();
     }
 }

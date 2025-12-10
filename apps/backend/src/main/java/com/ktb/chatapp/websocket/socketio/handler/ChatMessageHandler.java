@@ -33,6 +33,10 @@ import org.springframework.stereotype.Component;
 
 import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.*;
 
+/**
+ * Socket.IO `chat message` 이벤트를 처리하는 핵심 핸들러.
+ * 세션·레이트리밋·금칙어 검증 → 메시지 저장 → 브로드캐스트 → AI 호출까지의 파이프라인을 담당한다.
+ */
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "socketio.enabled", havingValue = "true", matchIfMissing = true)
@@ -120,6 +124,7 @@ public class ChatMessageHandler {
             }
 
             String roomId = data.getRoom();
+            //TODO : 011 : 자주 접근하는 room/participant 정보는 캐싱하거나 in-memory 구조로 보관해 DB 조회를 줄여야 대규모 실시간 트래픽에서 성능이 유지된다.
             Room room = roomRepository.findById(roomId).orElse(null);
             if (room == null || !room.getParticipantIds().contains(socketUser.id())) {
                 recordError("room_access_denied");
@@ -245,6 +250,7 @@ public class ChatMessageHandler {
         messageResponse.setSender(UserResponse.from(sender));
         messageResponse.setMetadata(message.getMetadata());
 
+        //TODO : 012 : 이미 handleFileMessage 단계에서 File 메타데이터를 알고 있으므로 메시지 응답 생성 시 다시 fileRepository 를 hit 하지 않도록 캐시/파이프라인을 바꾸면 파일 메시지 전송 성능이 향상된다.
         if (message.getFileId() != null) {
             fileRepository.findById(message.getFileId())
                     .ifPresent(file -> messageResponse.setFile(FileResponse.from(file)));
