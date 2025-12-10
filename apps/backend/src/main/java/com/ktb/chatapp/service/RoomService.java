@@ -200,8 +200,12 @@ public class RoomService {
         return roomResponse;
     }
 
-    public Optional<Room> findRoomById(String roomId) {
-        return roomRepository.findById(roomId);
+    public RoomResponse findRoomById(String roomId, String name) {
+        Room room = roomRepository.findById(roomId).orElse(null);
+
+        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(roomId, tenMinutesAgo);
+
+        return mapToRoomResponse(room, name, recentMessageCount);
     }
 
     public RoomResponse joinRoom(String roomId, String password, String name) {

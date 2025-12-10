@@ -207,15 +207,12 @@ public class RoomController {
     @GetMapping("/{roomId}")
     public ResponseEntity<?> getRoomById(@Parameter(description = "채팅방 ID", example = "60d5ec49f1b2c8b9e8c4f2a1") @PathVariable String roomId, Principal principal) {
         try {
-            Optional<Room> roomOpt = roomService.findRoomById(roomId);
-            if (roomOpt.isEmpty()) {
+            RoomResponse roomResponse = roomService.findRoomById(roomId, principal.getName());
+            if (roomResponse == null) {
                 return ResponseEntity.status(404).body(
                     StandardResponse.error("채팅방을 찾을 수 없습니다.")
                 );
             }
-
-            Room room = roomOpt.get();
-            RoomResponse roomResponse = mapToRoomResponse(room, principal.getName());
 
             return ResponseEntity.ok(
                 Map.of(
