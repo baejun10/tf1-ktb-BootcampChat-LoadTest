@@ -121,6 +121,7 @@ public class LocalFileService implements FileService {
     @Override
     public Resource loadFileAsResource(String fileName, String requesterId) {
         try {
+            //TODO 38 (HIGH): 파일 다운로드마다 file→message→room을 차례로 조회해 Mongo round-trip이 세 번 발생한다. Aggregation lookup이나 캐시를 사용해 단일 쿼리로 권한 검증과 메타데이터 조회를 끝내야 부하 테스트에서 I/O 병목을 피할 수 있다.
             File fileEntity = fileRepository.findByFilename(fileName)
                     .orElseThrow(() -> new RuntimeException("파일을 찾을 수 없습니다: " + fileName));
 
@@ -198,5 +199,4 @@ public class LocalFileService implements FileService {
         return StringUtils.cleanPath(originalFilename);
     }
 }
-
 

@@ -8,7 +8,7 @@ class FileService {
     this.uploadLimit = 50 * 1024 * 1024; // 50MB
     this.retryAttempts = 3;
     this.retryDelay = 1000;
-    this.activeUploads = new Map();
+    this.activeUploads = new Map(); //TODO 37 (LOW): 파일 이름을 키로 사용하면 동일한 이름의 동시 업로드가 충돌하므로 고유 업로드 ID 기반으로 추적해야 한다.
 
     this.allowedTypes = {
       image: {
@@ -88,6 +88,7 @@ class FileService {
         `${this.baseUrl}/api/files/presign` :
         '/api/files/presign';
 
+      //TODO 35 (MEDIUM): presign → S3 PUT → finalize 요청이 직렬화되어 있어 부하 테스트 시 장시간의 네트워크 round-trip이 누적되며 TPS가 급격히 떨어진다. presign 정보를 재사용하거나 finalize를 비동기화하는 방안을 검토하라.
       const presignResponse = await axiosInstance.post(presignUrl, {
         filename: file.name,
         mimetype: file.type,
@@ -174,6 +175,7 @@ class FileService {
   }
   async downloadFile(filename, originalname, token, sessionId) {
     try {
+      //TODO 36 (MEDIUM): 다운로드 전에 HEAD로 존재 여부를 확인하면서 곧바로 GET을 이어서 호출하므로 동일 파일을 두 번 네트워크 왕복한다. 서버가 오류 코드를 명확히 반환하므로 HEAD 단계를 생략하거나 conditional request로 병합할 수 있다.
       // 파일 존재 여부 먼저 확인
       const downloadUrl = this.getFileUrl(filename, false);
       // axios 인터셉터가 자동으로 인증 헤더를 추가합니다

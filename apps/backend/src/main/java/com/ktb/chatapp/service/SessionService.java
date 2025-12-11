@@ -80,6 +80,7 @@ public class SessionService {
                 return SessionValidationResult.invalid("INVALID_PARAMETERS", "유효하지 않은 세션 파라미터");
             }
 
+            //TODO 42 (HIGH): 모든 Socket 이벤트가 validateSession 을 호출하면서 sessionStore.findByUserId 로 Mongo round-trip을 발생시킨다. 세션 정보를 로컬 캐시에 보관하거나 request-context 에서 재사용해야 TPS 하락을 막을 수 있다.
             Session session = sessionStore.findByUserId(userId).orElse(null);
             
             if (session == null) {

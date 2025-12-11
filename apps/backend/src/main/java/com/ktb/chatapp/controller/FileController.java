@@ -63,6 +63,7 @@ public class FileController {
         try {
             log.info("Presign request started - filename: {}, size: {}", request.getFilename(), request.getSize());
 
+            //TODO 39 (MEDIUM): 다운로드/미리보기/삭제 요청마다 userRepository.findByEmail 을 호출하므로 동일 사용자가 연속 다운로드할 때도 Mongo 조회가 반복된다. SecurityContext 의 인증 정보를 재사용하도록 캐시를 두어라.
             User user = userRepository.findByEmail(principal.getName())
                     .orElseThrow(() -> new UsernameNotFoundException("User not found: " + principal.getName()));
 
@@ -167,6 +168,7 @@ public class FileController {
 
             Resource resource = fileService.loadFileAsResource(filename, user.getId());
 
+            //TODO 40 (LOW): fileService.loadFileAsResource 내부에서 이미 파일 메타데이터를 조회했는데 다시 fileRepository.findByFilename 으로 조회하고 있어 동일 쿼리가 두 번 발생한다.
             File fileEntity = fileRepository.findByFilename(filename)
                     .orElse(null);
 
