@@ -16,9 +16,17 @@ import FileActions from './FileActions';
 import ReadStatus from './ReadStatus';
 import fileService from '@/services/fileService';
 import { useAuth } from '@/contexts/AuthContext';
+import FileSkeleton from './FileSkeleton';
 
 const FileMessage = ({
-  msg = {},
+  msg = {
+    file: {
+      mimetype: '',
+      filename: '',
+      originalname: '',
+      size: 0
+    }
+  },
   isMine = false,
   currentUser = null,
   onReactionAdd,
@@ -33,34 +41,27 @@ const FileMessage = ({
   const [imageLoaded, setImageLoaded] = useState(false);  // ✅ 추가
   const messageDomRef = useRef(null);
   useEffect(() => {
+     setImageLoaded(false);  // ✅ 새 파일이 오면 로딩 상태 리셋
+
     if (msg?.file) {
       const url = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
       setPreviewUrl(url);
-      // 추가 코드
-      setImageLoaded(false);  // ✅ URL 변경 시 로딩 상태 리셋
       console.debug('Preview URL generated:', {
         filename: msg.file.filename,
-        url
+        url,
+        messageId: msg._id  // ✅ 메시지 ID 추가
       });
     }
-  }, [msg?.file, user?.token, user?.sessionId]);
+  }, [msg?.file, msg?._id, user?.token, user?.sessionId]);
 
+  // 수정 01:00
   // if (!msg?.file) {
   //   console.error('File data is missing:', msg);
   //   return null;
   // }
-  if (!msg?.file) {
-    console.error('File data is missing:', msg);
-    return (
-      <div className="my-4" data-testid="file-message-container">
-        <div className="p-3 bg-red-900 border border-red-700 rounded-lg text-red-200">
-          파일 메시지 데이터를 불러올 수 없습니다.
-        </div>
-      </div>
-    );
-  }
 
-  const formattedTime = new Date(msg.timestamp).toLocaleString('ko-KR', {
+  // 추가 코드
+  const formattedTime = msg?.timestamp ? new Date(msg.timestamp).toLocaleString('ko-KR', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -68,7 +69,17 @@ const FileMessage = ({
     minute: '2-digit',
     second: '2-digit',
     hour12: false
-  }).replace(/\./g, '년').replace(/\s/g, ' ').replace('일 ', '일 ');
+  }).replace(/\./g, '년').replace(/\s/g, ' ').replace('일 ', '일 ') : '시간 불명';
+
+  // const formattedTime = new Date(msg.timestamp).toLocaleString('ko-KR', {
+  //   year: 'numeric',
+  //   month: 'long',
+  //   day: 'numeric',
+  //   hour: '2-digit',
+  //   minute: '2-digit',
+  //   second: '2-digit',
+  //   hour12: false
+  // }).replace(/\./g, '년').replace(/\s/g, ' ').replace('일 ', '일 ');
 
   const getFileIcon = () => {
     const mimetype = msg.file?.mimetype || '';
@@ -187,26 +198,26 @@ const FileMessage = ({
       }
 
       const previewUrl = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
-      // 코드 수정
+
+      // 추가 코드
       return (
         <div className="bg-transparent-pattern relative">
-          {/* 코드 추가 */}
           {/* ✅ 로딩 중일 때 스피너 표시 */}
           {!imageLoaded && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 rounded-md">
-              <div className="spinner-border spinner-border-sm text-gray-400" role="status">
-                <span className="visually-hidden">Loading...</span>
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 rounded-md">
+              <div className="flex flex-col items-center gap-2">
+                <div className="spinner-border spinner-border-sm text-blue-400" role="status" />
+                <span className="text-xs text-gray-400">이미지 로딩 중...</span>
               </div>
             </div>
           )}
-
+          
           <img
             src={previewUrl}
             alt={originalname}
             className="max-w-[400px] max-h-[400px] object-cover object-center rounded-md"
             onLoad={() => {
               console.debug('Image loaded successfully:', originalname);
-              // 코드 추가
               setImageLoaded(true);  // ✅ 로딩 완료 표시
             }}
             onError={(e) => {
@@ -216,17 +227,16 @@ const FileMessage = ({
               });
               e.target.onerror = null;
               e.target.src = '/images/placeholder-image.png';
-              // 코드 추가
-              setImageLoaded(true);  // ✅ 에러 후에도 로딩 완료 표시
+              setImageLoaded(true);  // ✅ 에러 후에도 로딩 완료 처리
               setError('이미지를 불러올 수 없습니다.');
             }}
             loading="lazy"
             data-testid="file-image-preview"
+            crossOrigin="use-credentials"
           />
         </div>
       );
 
-      // 원래 코드
       // return (
       //   <div className="bg-transparent-pattern">
       //     <img
@@ -262,15 +272,30 @@ const FileMessage = ({
   };
 
   const renderFilePreview = () => {
+    // 추가 코드
+    if (!msg?.file) {
+      return <FileSkeleton type="image" isLoading={true} />;
+    }
+
     const mimetype = msg.file?.mimetype || '';
     const originalname = getDecodedFilename(msg.file?.originalname || 'Unknown File');
     const size = fileService.formatFileSize(msg.file?.size || 0);
+
+    // 파일 타입별로 적절한 스켈레톤 사용
+    const skeletonType = mimetype.startsWith('image/')
+      ? 'image'
+      : mimetype.startsWith('video/')
+      ? 'video'
+      : mimetype.startsWith('audio/')
+      ? 'audio'
+      : 'document';
 
     const previewWrapperClass = "overflow-hidden";
 
     if (mimetype.startsWith('image/')) {
       return (
         <div className={previewWrapperClass}>
+          {!imageLoaded && <FileSkeleton type="image" isLoading={true} />}
           {renderImagePreview(originalname)}
           <div className="flex items-center gap-2 mt-2">
             {getFileIcon()}
@@ -287,6 +312,7 @@ const FileMessage = ({
     if (mimetype.startsWith('video/')) {
       return (
         <div className={previewWrapperClass}>
+          {!imageLoaded && <FileSkeleton type="video" isLoading={true} />}
           <div>
             {previewUrl ? (
               <video
@@ -321,6 +347,7 @@ const FileMessage = ({
     if (mimetype.startsWith('audio/')) {
       return (
         <div className={previewWrapperClass}>
+          {!imageLoaded && <FileSkeleton type="audio" isLoading={true} />}
           <div className="flex items-center gap-2 mt-2">
             {getFileIcon()}
             <div className="flex-1 min-w-0">
@@ -360,10 +387,9 @@ const FileMessage = ({
       </div>
     );
   };
-  // 코드 수정(리턴 부분 수정)
+
   return (
     <div className="my-4" ref={messageDomRef} data-testid="file-message-container">
-      {/* ✅ data-testid는 즉시 렌더링되므로 테스트에서 찾을 수 있음 */}
       <VStack
         className={`max-w-[65%] ${isMine ? 'ml-auto items-end' : 'mr-auto items-start'}`}
         gap="$100"
@@ -377,7 +403,7 @@ const FileMessage = ({
           </span>
         </HStack>
 
-        {/* Message Bubble */}
+        {/* Message Bubble - Outline Based */}
         <div className={`
           relative group
           rounded-2xl px-4 py-3
@@ -387,14 +413,19 @@ const FileMessage = ({
             : 'bg-transparent border-gray-400 hover:border-gray-300 hover:shadow-md'
           }
         `}>
-          {/* Message Content - ✅ 파일 프리뷰 렌더링 */}
+          {/* Message Content */}
           <div className={`
             ${isMine ? 'text-blue-100' : 'text-white'}
           `}>
             {error && (
               <div>{error}</div>
             )}
-            {!error && renderFilePreview()}  {/* ✅ 로딩 UI를 포함한 파일 미리보기 */}
+            {!error && renderFilePreview()}
+            {/* {!error && msg.content && (
+              <div className="mt-3 text-base leading-relaxed">
+                <MessageContent content={msg.content} />
+              </div>
+            )} */}
             {!error && msg.content !== undefined && msg.content !== null && (
               <div className="mt-3 text-base leading-relaxed">
                 <MessageContent content={msg.content} />
@@ -441,104 +472,19 @@ const FileMessage = ({
       </VStack>
     </div>
   );
-
-  // return (
-  //   <div className="my-4" ref={messageDomRef} data-testid="file-message-container">
-  //     <VStack
-  //       className={`max-w-[65%] ${isMine ? 'ml-auto items-end' : 'mr-auto items-start'}`}
-  //       gap="$100"
-  //       align={isMine ? 'flex-end' : 'flex-start'}
-  //     >
-  //       {/* Sender Info */}
-  //       <HStack gap="$100" alignItems="center" className="px-1">
-  //         {renderAvatar()}
-  //         <span className="text-sm font-medium text-gray-300">
-  //           {isMine ? '나' : msg.sender?.name}
-  //         </span>
-  //       </HStack>
-
-  //       {/* Message Bubble - Outline Based */}
-  //       <div className={`
-  //         relative group
-  //         rounded-2xl px-4 py-3
-  //         border transition-all duration-200
-  //         ${isMine
-  //           ? 'bg-gray-800 border-blue-500 hover:border-blue-400 hover:shadow-md'
-  //           : 'bg-transparent border-gray-400 hover:border-gray-300 hover:shadow-md'
-  //         }
-  //       `}>
-  //         {/* Message Content */}
-  //         <div className={`
-  //           ${isMine ? 'text-blue-100' : 'text-white'}
-  //         `}>
-  //           {error && (
-  //             <div>{error}</div>
-  //           )}
-  //           {!error && renderFilePreview()}
-  //           {/* {!error && msg.content && (
-  //             <div className="mt-3 text-base leading-relaxed">
-  //               <MessageContent content={msg.content} />
-  //             </div>
-  //           )} */}
-  //           {!error && msg.content !== undefined && msg.content !== null && (
-  //             <div className="mt-3 text-base leading-relaxed">
-  //               <MessageContent content={msg.content} />
-  //             </div>
-  //           )}
-  //         </div>
-
-  //         {/* Message Footer */}
-  //         <HStack
-  //           gap="$150"
-  //           justifyContent="flex-end"
-  //           alignItems="center"
-  //           className={`mt-2 pt-2 border-t ${isMine ? 'border-gray-700' : 'border-gray-600'}`}
-  //         >
-  //           <div
-  //             className={`text-xs ${isMine ? 'text-blue-400' : 'text-gray-300'}`}
-  //             title={new Date(msg.timestamp).toLocaleString('ko-KR')}
-  //           >
-  //             {formattedTime}
-  //           </div>
-  //           <ReadStatus
-  //             messageType={msg.type}
-  //             participants={room?.participants || []}
-  //             readers={msg.readers || []}
-  //             messageId={msg._id}
-  //             messageRef={messageDomRef}
-  //             currentUserId={currentUser?._id || currentUser?.id}
-  //             socketRef={socketRef}
-  //           />
-  //         </HStack>
-  //       </div>
-
-  //       {/* Message Actions */}
-  //       <MessageActions
-  //         messageId={msg._id}
-  //         messageContent={msg.content}
-  //         reactions={msg.reactions}
-  //         currentUserId={currentUser?._id || currentUser?.id}
-  //         onReactionAdd={onReactionAdd}
-  //         onReactionRemove={onReactionRemove}
-  //         isMine={isMine}
-  //         room={room}
-  //       />
-  //     </VStack>
-  //   </div>
-  // );
 };
 
-FileMessage.defaultProps = {
-  msg: {
-    file: {
-      mimetype: '',
-      filename: '',
-      originalname: '',
-      size: 0
-    }
-  },
-  isMine: false,
-  currentUser: null
-};
+// FileMessage.defaultProps = {
+//   msg: {
+//     file: {
+//       mimetype: '',
+//       filename: '',
+//       originalname: '',
+//       size: 0
+//     }
+//   },
+//   isMine: false,
+//   currentUser: null
+// };
 
 export default React.memo(FileMessage);

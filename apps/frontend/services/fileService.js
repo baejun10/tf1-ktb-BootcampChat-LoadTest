@@ -269,21 +269,30 @@ class FileService {
     return `${baseUrl}/api/files/${endpoint}/${filename}`;
   }
 
-  getPreviewUrl(file, token, sessionId, withAuth = true) {
+  getPreviewUrl(file, token, sessionId, withAuth = true, inline = false) {
     if (!file?.filename) return '';
 
-    const baseUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/files/view/${file.filename}`;
+    const baseUrl = this.getFileUrl(file.filename, inline);
+    const queryParams = new URLSearchParams({
+      token: encodeURIComponent(token),
+      sessionId: encodeURIComponent(sessionId),
+      // ✅ 캐시 무효화: 타임스탬프 추가 (선택사항)
+      // timestamp: Date.now() // 추가하면 매번 새로운 요청 (성능 저하)
+    });
 
-    if (!withAuth) return baseUrl;
+    return `${baseUrl}?${queryParams.toString()}`;
+    // const baseUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/files/view/${file.filename}`;
 
-    if (!token || !sessionId) return baseUrl;
+    // if (!withAuth) return baseUrl;
 
-    // URL 객체 생성 전 프로토콜 확인
-    const url = new URL(baseUrl);
-    url.searchParams.append('token', encodeURIComponent(token));
-    url.searchParams.append('sessionId', encodeURIComponent(sessionId));
+    // if (!token || !sessionId) return baseUrl;
 
-    return url.toString();
+    // // URL 객체 생성 전 프로토콜 확인
+    // const url = new URL(baseUrl);
+    // url.searchParams.append('token', encodeURIComponent(token));
+    // url.searchParams.append('sessionId', encodeURIComponent(sessionId));
+
+    // return url.toString();
   }
 
   getFileType(filename) {

@@ -6,14 +6,22 @@ import EmojiPicker from './EmojiPicker';
 import { Toast } from './Toast';
 
 const MessageActions = ({ 
-  messageId,
-  messageContent,
-  reactions,
-  currentUserId,
-  onReactionAdd,
-  onReactionRemove,
+  messageId = '',
+  messageContent = '',
+  reactions = {},
+  currentUserId = null,
+  onReactionAdd = () => {},
+  onReactionRemove = () => {},
   isMine = false,
   room = null
+  // messageId,
+  // messageContent,
+  // reactions,
+  // currentUserId,
+  // onReactionAdd,
+  // onReactionRemove,
+  // isMine = false,
+  // room = null
 }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [tooltipStates, setTooltipStates] = useState({});
@@ -255,15 +263,15 @@ const MessageActions = ({
   );
 };
 
-MessageActions.defaultProps = {
-  messageId: '',
-  messageContent: '',
-  reactions: {},
-  currentUserId: null,
-  onReactionAdd: () => {},
-  onReactionRemove: () => {},
-  isMine: false,
-  room: null
-};
+// MessageActions.defaultProps = {
+//   messageId: '',
+//   messageContent: '',
+//   reactions: {},
+//   currentUserId: null,
+//   onReactionAdd: () => {},
+//   onReactionRemove: () => {},
+//   isMine: false,
+//   room: null
+//};
 
 export default React.memo(MessageActions);

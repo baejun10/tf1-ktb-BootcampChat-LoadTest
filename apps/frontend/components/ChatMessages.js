@@ -102,7 +102,8 @@ const ChatMessages = ({
 
     return (
       <MessageComponent
-        key={msg._id || `msg-${idx}`}
+        // key={msg._id || `msg-${idx}`}
+        key={`${msg.type}-${msg._id}-${msg.timestamp}`}
         {...commonProps}
         msg={msg}
         content={msg.content}
