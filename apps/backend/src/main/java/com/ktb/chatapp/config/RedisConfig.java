@@ -3,9 +3,6 @@ package com.ktb.chatapp.config;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import java.time.Duration;
-import org.redisson.Redisson;
-import org.redisson.api.RedissonClient;
-import org.redisson.config.Config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -66,22 +63,5 @@ public class RedisConfig {
         template.setHashKeySerializer(new StringRedisSerializer());
         template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
         return template;
-    }
-
-    @Bean
-    public RedissonClient redissonClient() {
-        Config config = new Config();
-        String address = "redis://" + redisHost + ":" + redisPort;
-
-        var singleServerConfig = config.useSingleServer()
-                .setAddress(address)
-                .setConnectTimeout(3000)
-                .setTimeout(5000);
-
-        if (redisPassword != null && !redisPassword.isEmpty()) {
-            singleServerConfig.setPassword(redisPassword);
-        }
-
-        return Redisson.create(config);
     }
 }
