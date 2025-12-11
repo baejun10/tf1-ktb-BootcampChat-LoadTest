@@ -148,23 +148,23 @@ jobs:
             # 4. systemd 서비스 파일 재작성 (JVM 옵션 클린 적용)
             echo '>>> [Auto-Config] systemd 서비스 파일 재작성 (JAVA_OPTS 적용)...'
             cat << EOF_SERVICE | sudo tee /etc/systemd/system/ktb-chat.service
-            [Unit]
-            Description=KTB Chat Backend
-            After=network.target
-            
-            [Service]
-            User=ubuntu
-            WorkingDirectory=/home/ubuntu/ktb-chat-backend
-            EnvironmentFile=/home/ubuntu/ktb-chat-backend/.env
-            Environment=JAVA_OPTS=\"\$JAVA_OPTS\"
-            ExecStart=/usr/bin/java \$JAVA_OPTS -jar /home/ubuntu/ktb-chat-backend/app.jar
-            SuccessExitStatus=143
-            Restart=always
-            RestartSec=10
-            
-            [Install]
-            WantedBy=multi-user.target
-            EOF_SERVICE
+  [Unit]
+  Description=KTB Chat Backend
+  After=network.target
+  
+  [Service]
+  User=ubuntu
+  WorkingDirectory=/home/ubuntu/ktb-chat-backend
+  EnvironmentFile=/home/ubuntu/ktb-chat-backend/.env
+  Environment=JAVA_OPTS=\"\$JAVA_OPTS\"
+  ExecStart=/usr/bin/java \$JAVA_OPTS -jar /home/ubuntu/ktb-chat-backend/app.jar
+  SuccessExitStatus=143
+  Restart=always
+  RestartSec=10
+  
+  [Install]
+  WantedBy=multi-user.target
+  EOF_SERVICE
           
             # 데몬 리로드 (변경 사항 적용을 위해 필수)
             echo '>>> [Auto-Config] systemd 데몬 리로드...'
