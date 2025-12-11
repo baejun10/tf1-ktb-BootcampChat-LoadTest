@@ -8,8 +8,8 @@ import org.springframework.util.StringUtils;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.S3Configuration;
-import software.amazon.awssdk.services.s3.S3Configuration.Builder;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 @Configuration
@@ -21,7 +21,7 @@ public class S3Config {
             @Value("${storage.s3.endpoint:}") String endpoint,
             @Value("${storage.s3.path-style-enabled:false}") boolean pathStyleEnabled
     ) {
-        S3Client.Builder builder = S3Client.builder()
+        S3ClientBuilder builder = S3Client.builder()
                 .credentialsProvider(DefaultCredentialsProvider.create())
                 .region(Region.of(region));
 
@@ -29,7 +29,7 @@ public class S3Config {
             builder.endpointOverride(URI.create(endpoint));
         }
 
-        Builder serviceConfig = S3Configuration.builder()
+        S3Configuration.Builder serviceConfig = S3Configuration.builder()
                 .checksumValidationEnabled(false);
         if (pathStyleEnabled) {
             serviceConfig.pathStyleAccessEnabled(true);
