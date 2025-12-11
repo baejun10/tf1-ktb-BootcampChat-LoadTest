@@ -105,11 +105,9 @@ jobs:
           CURRENT_IP: ${{ matrix.ip }} # 현재 Job이 담당하는 IP
 
         run: |
-          # SSH 키 파일 생성
           echo "$SSH_KEY" > key.pem
           chmod 600 key.pem
           
-          # [변경] for 루프 없이 단일 IP($CURRENT_IP)에 대해 배포 실행
           echo "--------------------------------------------------"
           echo "🚀 Deploying to $CURRENT_IP (Matrix Job) ..."
           echo "--------------------------------------------------"
@@ -124,13 +122,13 @@ jobs:
             apps/backend/deploy.sh \
             $USER@$CURRENT_IP:/home/ubuntu/ktb-chat-backend/temp/deploy.sh
           
-          # C. 원격 명령 실행 (hosts 설정 + .env 생성/적용 + 실행)
+          # C. 원격 명령 실행
           ssh -o StrictHostKeyChecking=no -i key.pem $USER@$CURRENT_IP "
-            # 1. 실행 권한 부여 및 deploy.sh 이동
+            # 1. 실행 권한 부여
             chmod +x /home/ubuntu/ktb-chat-backend/temp/deploy.sh && \
             mv /home/ubuntu/ktb-chat-backend/temp/deploy.sh /home/ubuntu/ktb-chat-backend/deploy.sh && \
           
-            # 2. /etc/hosts 몽고디비 IP 자동 등록
+            # 2. hosts 등록 (생략 가능하면 생략)
             if ! grep -q 'chat-mongodb-01' /etc/hosts; then
               echo '>>> [Auto-Config] MongoDB IP 등록...'
               echo '10.0.101.147  chat-mongodb-01' | sudo tee -a /etc/hosts
@@ -138,40 +136,31 @@ jobs:
               echo '10.0.101.249  chat-mongodb-03' | sudo tee -a /etc/hosts
             fi && \
           
-            # 3. [핵심] .env 파일 내용 작성 (Secrets 주입)
-            echo '>>> [Auto-Config] .env 파일 재생성 및 Secrets 주입...'
+            # 3. [핵심 수정] 변수 값을 쌍따옴표(\")로 감싸서 .env 생성
+            echo '>>> [Auto-Config] .env 파일 재생성...'
             cat << EOF | sudo tee /home/ubuntu/ktb-chat-backend/.env
-          # 스토리지 프로바이더 선택
-          STORAGE_PROVIDER=$STORAGE_PROVIDER
-
-          # 몽고디비 설정
-          MONGO_URI=$MONGO_URI
-
-          # 레디스 설정
-          REDIS_HOST=$REDIS_HOST
+          STORAGE_PROVIDER=\"$STORAGE_PROVIDER\"
+          MONGO_URI=\"$MONGO_URI\"
+          REDIS_HOST=\"$REDIS_HOST\"
           REDIS_PORT=6379
-
-          # 포트 설정
           PORT=5001
           WS_PORT=5002
-
-          # S3/CloudFront 설정
-          S3_BUCKET=${{ vars.S3_BUCKET }}
-          S3_REGION=${{ secrets.AWS_REGION }}
-          S3_ACCESS_KEY=$S3_ACCESS_KEY
-          S3_SECRET_KEY=$S3_SECRET_KEY
-          S3_PUBLIC_BASE_URL=${{ vars.S3_PUBLIC_BASE_URL }}
-          S3_BASE_DIR=uploads
+          
+          S3_BUCKET=\"$S3_BUCKET\"
+          S3_REGION=\"${{ secrets.AWS_REGION }}\"
+          S3_ACCESS_KEY=\"$S3_ACCESS_KEY\"
+          S3_SECRET_KEY=\"$S3_SECRET_KEY\"
+          S3_PUBLIC_BASE_URL=\"$S3_PUBLIC_BASE_URL\"
+          S3_BASE_DIR=\"uploads\"
           S3_PRESIGN_EXPIRATION_SECONDS=900
-
-          # 보안 키 및 API
-          JWT_SECRET=$JWT_SECRET
-          ENCRYPTION_KEY=$ENCRYPTION_KEY
-          ENCRYPTION_SALT=$ENCRYPTION_SALT
-          OPENAI_API_KEY=$OPENAI_API_KEY
+          
+          JWT_SECRET=\"$JWT_SECRET\"
+          ENCRYPTION_KEY=\"$ENCRYPTION_KEY\"
+          ENCRYPTION_SALT=\"$ENCRYPTION_SALT\"
+          OPENAI_API_KEY=\"$OPENAI_API_KEY\"
           EOF
           
-            # 4. 실제 배포 스크립트 실행 (ktb-chat 서비스 재시작 포함)
+            # 4. 배포 스크립트 실행
             /home/ubuntu/ktb-chat-backend/deploy.sh
           "
           
