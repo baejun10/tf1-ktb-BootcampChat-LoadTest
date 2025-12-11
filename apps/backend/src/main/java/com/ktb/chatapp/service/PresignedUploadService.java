@@ -174,7 +174,7 @@ public class PresignedUploadService {
     private Map<String, String> flattenHeaders(Map<String, List<String>> signedHeaders, String mimetype) {
         Map<String, String> headers = new HashMap<>();
         signedHeaders.forEach((key, values) -> {
-            if (!values.isEmpty()) {
+            if (!values.isEmpty() && !key.equalsIgnoreCase("host")) {
                 headers.put(key, values.get(0));
             }
         });
