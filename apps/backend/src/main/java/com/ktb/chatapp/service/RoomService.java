@@ -36,6 +36,7 @@ public class RoomService {
     private final MessageRepository messageRepository;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
+    private final RoomCacheService roomCacheService;
 
     private static final LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
 
@@ -241,17 +242,12 @@ public class RoomService {
     }
 
     public RoomResponse findRoomById(String roomId, String name) {
-        Room room = roomRepository.findById(roomId).orElse(null);
-        
-        if (room == null) {
-            return null;
-        }
-
-        return buildSingleRoomResponse(room, name);
+        Optional<Room> roomOpt = roomCacheService.findRoomById(roomId);
+        return roomOpt.map(room -> buildSingleRoomResponse(room, name)).orElse(null);
     }
 
     public RoomResponse joinRoom(String roomId, String password, String name) {
-        Optional<Room> roomOpt = roomRepository.findById(roomId);
+        Optional<Room> roomOpt = roomCacheService.findRoomById(roomId);
         if (roomOpt.isEmpty()) {
             return null;
         }

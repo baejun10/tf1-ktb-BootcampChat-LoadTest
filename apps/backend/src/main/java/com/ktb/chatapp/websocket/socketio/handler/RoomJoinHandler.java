@@ -14,6 +14,7 @@ import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.FileCacheService;
+import com.ktb.chatapp.service.RoomCacheService;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.websocket.socketio.UserRooms;
 import java.time.LocalDateTime;
@@ -51,7 +52,7 @@ public class RoomJoinHandler {
     private final MessageResponseMapper messageResponseMapper;
     private final FileCacheService fileCacheService;
     private final RoomLeaveHandler roomLeaveHandler;
-
+    private final RoomCacheService roomCacheService;
 
     /**
      * 방 입장 이벤트 핸들러
@@ -103,8 +104,8 @@ public class RoomJoinHandler {
                 return;
             }
 
-            // MongoDB의 $addToSet 연산자를 사용한 원자적 업데이트
-            roomRepository.addParticipant(roomId, userId);
+            // 캐시 만료
+            roomCacheService.addParticipant(roomId, userId);
 
             // Join socket room and add to user's room set
             client.joinRoom(roomId);

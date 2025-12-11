@@ -13,12 +13,9 @@ import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
+import com.ktb.chatapp.service.*;
 import com.ktb.chatapp.util.BannedWordChecker;
 import com.ktb.chatapp.websocket.socketio.ai.AiService;
-import com.ktb.chatapp.service.SessionService;
-import com.ktb.chatapp.service.SessionValidationResult;
-import com.ktb.chatapp.service.RateLimitService;
-import com.ktb.chatapp.service.RateLimitCheckResult;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -52,6 +49,7 @@ public class ChatMessageHandler {
     private final BannedWordChecker bannedWordChecker;
     private final RateLimitService rateLimitService;
     private final MeterRegistry meterRegistry;
+    private final RoomCacheService roomCacheService;
     
     @OnEvent(CHAT_MESSAGE)
     public void handleChatMessage(SocketIOClient client, ChatMessageRequest data) {
@@ -125,7 +123,9 @@ public class ChatMessageHandler {
 
             String roomId = data.getRoom();
             //TODO : 011 : 자주 접근하는 room/participant 정보는 캐싱하거나 in-memory 구조로 보관해 DB 조회를 줄여야 대규모 실시간 트래픽에서 성능이 유지된다.
-            Room room = roomRepository.findById(roomId).orElse(null);
+            // -> 캐시된 Room을 조회한다
+            Room room = roomCacheService.findRoomById(roomId).orElse(null);
+
             if (room == null || !room.getParticipantIds().contains(socketUser.id())) {
                 recordError("room_access_denied");
                 client.sendEvent(ERROR, Map.of(
