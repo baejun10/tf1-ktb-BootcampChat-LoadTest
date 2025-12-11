@@ -138,10 +138,15 @@ public class ChatMessageHandler {
 
             MessageContent messageContent = data.getParsedContent();
 
-            log.debug("Message received - type: {}, room: {}, userId: {}, hasFileData: {}",
-                data.getMessageType(), roomId, socketUser.id(), data.hasFileData());
+            log.info("Message received - type: {}, room: {}, userId: {}, participantCount: {}, hasFileData: {}",
+                    data.getMessageType(),
+                    roomId,
+                    socketUser.id(),
+                    room.getParticipantIds() != null ? room.getParticipantIds().size() : 0,
+                    data.hasFileData());
 
             //TODO 32 (MEDIUM): 금칙어 검증이 매 메시지마다 전체 단어 리스트를 순회하므로 Trie/Automation 캐시를 두거나 최근 검증 결과를 재사용해 CPU 사용량을 줄여야 한다.
+            // [개선] Aho-Corasick 알고리즘
             if (bannedWordChecker.containsBannedWord(messageContent.getTrimmedContent())) {
                 recordError("banned_word");
                 client.sendEvent(ERROR, Map.of(
@@ -166,9 +171,19 @@ public class ChatMessageHandler {
             }
 
             Message savedMessage = messageRepository.save(message);
+            log.info("Message persisted - id: {}, room: {}, userId: {}, type: {}, contentPreview: {}",
+                    savedMessage.getId(),
+                    roomId,
+                    socketUser.id(),
+                    savedMessage.getType(),
+                    previewContent(savedMessage.getContent()));
 
             socketIOServer.getRoomOperations(roomId)
                     .sendEvent(MESSAGE, createMessageResponse(savedMessage, sender));
+            log.info("Message broadcast completed - messageId: {}, room: {}, recipients: {}",
+                    savedMessage.getId(),
+                    roomId,
+                    room.getParticipantIds() != null ? room.getParticipantIds().size() : 0);
 
             // AI 멘션 처리
             aiService.handleAIMentions(roomId, socketUser.id(), messageContent);
@@ -284,5 +299,12 @@ public class ChatMessageHandler {
                 .tag("error_type", errorType)
                 .register(meterRegistry)
                 .increment();
+    }
+
+    private String previewContent(String content) {
+        if (content == null) {
+            return "";
+        }
+        return content.length() <= 30 ? content : content.substring(0, 30) + "...";
     }
 }
