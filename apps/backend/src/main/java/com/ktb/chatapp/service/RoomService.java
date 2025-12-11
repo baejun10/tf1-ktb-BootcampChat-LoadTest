@@ -256,24 +256,21 @@ public class RoomService {
         User user = userRepository.findByEmail(name)
             .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + name));
 
-        // 비밀번호 확인
         if (room.isHasPassword()) {
             if (password == null || !passwordEncoder.matches(password, room.getPassword())) {
                 throw new RuntimeException("비밀번호가 일치하지 않습니다.");
             }
         }
 
-        // 이미 참여중인지 확인
         if (!room.getParticipantIds().contains(user.getId())) {
             //TODO : 021 : 참가자 추가를 전체 Room 문서를 읽고 저장하는 대신 Mongo $addToSet 업데이트로 처리하면 경합과 write volume 을 줄일 수 있다.
-            // 채팅방 참여
-            room.getParticipantIds().add(user.getId());
-            room = roomRepository.save(room);
+            roomCacheService.addParticipant(roomId, user.getId());
+            roomOpt = roomCacheService.findRoomById(roomId);
+            room = roomOpt.orElse(room);
         }
 
         RoomResponse roomResponse = buildSingleRoomResponse(room, name);
 
-        // Publish event for room updated
         try {
             eventPublisher.publishEvent(new RoomUpdatedEvent(this, roomId, roomResponse));
         } catch (Exception e) {
