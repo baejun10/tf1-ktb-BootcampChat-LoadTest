@@ -86,7 +86,7 @@ fi
 HEALTH_URL="http://localhost:${APP_PORT}/api/health"
 echo ">>> 헬스체크 시작: $HEALTH_URL (최대 30초)"
 
-for i in {1..10}; do
+for i in {1..30}; do
     sleep 3
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
     
@@ -94,7 +94,7 @@ for i in {1..10}; do
         echo ">>> [Success] 배포 성공! (HTTP 200)"
         exit 0
     fi
-    echo ">>> 대기 중... ($i/10) - Res: $HTTP_CODE"
+    echo ">>> 대기 중... ($i/30) - Res: $HTTP_CODE"
 done
 
 echo ">>> [Fail] 배포 실패. 헬스체크 응답 없음."
