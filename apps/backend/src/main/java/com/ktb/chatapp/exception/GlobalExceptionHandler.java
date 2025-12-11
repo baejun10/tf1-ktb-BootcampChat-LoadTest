@@ -7,9 +7,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
@@ -99,6 +101,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<StandardResponse<Object>> handleRuntimeException(
             RuntimeException ex, HttpServletRequest request) {
 
+        if (isClientDisconnected(ex)) {
+            log.warn("클라이언트 연결이 종료되었습니다 (runtime): {} - {}", request.getRequestURI(), ex.getMessage());
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).<StandardResponse<Object>>build();
+        }
+
         log.error("런타임 예외: {} - {}", request.getRequestURI(), ex.getMessage(), ex);
 
         StandardResponse<Object> response = StandardResponse.error(ApiErrorCode.INTERNAL_SERVER_ERROR);
@@ -122,6 +129,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<StandardResponse<Object>> handleGenericException(
             Exception ex, HttpServletRequest request) {
 
+        if (isClientDisconnected(ex)) {
+            log.warn("클라이언트 연결이 종료되었습니다: {} - {}", request.getRequestURI(), ex.getMessage());
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).<StandardResponse<Object>>build();
+        }
+
         log.error("예상치 못한 예외: {} - {}", request.getRequestURI(), ex.getMessage(), ex);
 
         StandardResponse<Object> response = StandardResponse.error(ApiErrorCode.INTERNAL_SERVER_ERROR);
@@ -131,6 +143,24 @@ public class GlobalExceptionHandler {
         }
 
         return ResponseEntity.status(ApiErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus()).body(response);
+    }
+
+    private boolean isClientDisconnected(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if ("ClientAbortException".equals(current.getClass().getSimpleName())) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null) {
+                String normalized = message.toLowerCase(Locale.ROOT);
+                if (normalized.contains("broken pipe") || normalized.contains("connection reset")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private boolean isDevelopmentProfile() {
