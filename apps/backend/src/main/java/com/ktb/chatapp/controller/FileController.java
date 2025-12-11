@@ -59,9 +59,7 @@ public class FileController {
 
     @PostMapping("/presign")
     public ResponseEntity<?> createPresignedUpload(@RequestBody PresignedUploadRequest request, Principal principal) {
-        long startTime = System.currentTimeMillis();
         try {
-            log.info("Presign request started - filename: {}, size: {}", request.getFilename(), request.getSize());
 
             //TODO 39 (MEDIUM): 다운로드/미리보기/삭제 요청마다 userRepository.findByEmail 을 호출하므로 동일 사용자가 연속 다운로드할 때도 Mongo 조회가 반복된다. SecurityContext 의 인증 정보를 재사용하도록 캐시를 두어라.
             User user = userRepository.findByEmail(principal.getName())
@@ -69,13 +67,8 @@ public class FileController {
 
             PresignedUploadResponse response = presignedUploadService.createUploadRequest(request, user.getId());
 
-            long elapsed = System.currentTimeMillis() - startTime;
-            log.info("Presign request completed - uploadId: {}, elapsed: {}ms", response.getUploadId(), elapsed);
-
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            long elapsed = System.currentTimeMillis() - startTime;
-            log.error("Presigned URL 생성 중 에러 발생 - elapsed: {}ms", elapsed, e);
             return handleFileError(e);
         }
     }
