@@ -7,11 +7,10 @@ import com.ktb.chatapp.dto.MarkAsReadRequest;
 import com.ktb.chatapp.dto.MessagesReadResponse;
 import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.Room;
-import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
+import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.MessageReadStatusService;
-import com.ktb.chatapp.service.RoomCacheService;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.websocket.socketio.UserRooms;
 import java.util.Map;
@@ -36,7 +35,7 @@ public class MessageReadHandler {
     private final MessageReadStatusService messageReadStatusService;
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
-    private final RoomCacheService roomCacheService;
+    private final RoomRepository roomRepository;
     private final UserRooms userRooms;
     
     @OnEvent(MARK_MESSAGES_AS_READ)
@@ -72,7 +71,7 @@ public class MessageReadHandler {
                 return;
             }
 
-            Room room = roomCacheService.findRoomById(roomId).orElse(null);
+            Room room = roomRepository.findById(roomId).orElse(null);
             if (room == null) {
                 log.warn("Room {} not found in cache for user {}", roomId, userId);
                 client.sendEvent(ERROR, Map.of("message", "Room not found"));

@@ -43,7 +43,6 @@ class ChatMessageHandlerTest {
     @Mock private BannedWordChecker bannedWordChecker;
     @Mock private RateLimitService rateLimitService;
     private MeterRegistry meterRegistry = new SimpleMeterRegistry();
-    @Mock private RoomCacheService roomCacheService;
 
     private ChatMessageHandler handler;
 
@@ -60,8 +59,7 @@ class ChatMessageHandlerTest {
                         sessionService,
                         bannedWordChecker,
                         rateLimitService,
-                        meterRegistry,
-                        roomCacheService);
+                        meterRegistry);
     }
 
     @Test

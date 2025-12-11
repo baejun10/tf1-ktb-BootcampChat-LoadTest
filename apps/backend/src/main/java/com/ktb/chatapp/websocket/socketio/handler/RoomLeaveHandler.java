@@ -10,8 +10,8 @@ import com.ktb.chatapp.model.MessageType;
 import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
+import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
-import com.ktb.chatapp.service.RoomCacheService;
 import com.ktb.chatapp.service.FileCacheService;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.websocket.socketio.UserRooms;
@@ -42,7 +42,7 @@ public class RoomLeaveHandler {
     private final UserRepository userRepository;
     private final UserRooms userRooms;
     private final MessageResponseMapper messageResponseMapper;
-    private final RoomCacheService roomCacheService;
+    private final RoomRepository roomRepository;
     private final FileCacheService fileCacheService;
 
     @OnEvent(LEAVE_ROOM)
@@ -62,7 +62,7 @@ public class RoomLeaveHandler {
             }
 
             User user = userRepository.findById(userId).orElse(null);
-            Room room = roomCacheService.findRoomById(roomId).orElse(null);
+            Room room = roomRepository.findById(roomId).orElse(null);
 
             if (user == null || room == null) {
                 log.warn("Room {} not found or user {} has no access", roomId, userId);
@@ -70,7 +70,7 @@ public class RoomLeaveHandler {
             }
 
             // 캐시 만료
-            roomCacheService.removeParticipant(roomId, userId);
+            roomRepository.removeParticipant(roomId, userId);
 
             client.leaveRoom(roomId);
             userRooms.remove(userId, roomId);
@@ -124,7 +124,7 @@ public class RoomLeaveHandler {
     }
     
     private void broadcastParticipantList(String roomId) {
-        Optional<Room> roomOpt = roomCacheService.findRoomById(roomId);
+        Optional<Room> roomOpt = roomRepository.findById(roomId);
         if (roomOpt.isEmpty()) {
             return;
         }
