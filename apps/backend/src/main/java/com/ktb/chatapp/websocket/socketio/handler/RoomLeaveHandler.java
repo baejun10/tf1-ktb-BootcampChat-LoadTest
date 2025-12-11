@@ -121,19 +121,17 @@ public class RoomLeaveHandler {
         }
 
         // TODO : 025 : Stream에서 map(userRepository::findById)는 참가자 수만큼 DB 쿼리를 발생시키므로 N+1 문제가 발생한다.
-        var participantList = roomOpt.get()
-                .getParticipantIds()
-                .stream()
-                .map(userRepository::findById)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(UserResponse::from)
-                .toList();
-        
-        if (participantList.isEmpty()) {
+        /// [개선 025] 인메모리 조인(Mapping)으로 수정
+        var participantIds = roomOpt.get().getParticipantIds();
+        if (participantIds.isEmpty()) {
             return;
         }
-        
+
+        var participantList = userRepository.findAllById(participantIds)
+                .stream()
+                .map(UserResponse::from)
+                .toList();
+
         socketIOServer.getRoomOperations(roomId)
                 .sendEvent(PARTICIPANTS_UPDATE, participantList);
     }
