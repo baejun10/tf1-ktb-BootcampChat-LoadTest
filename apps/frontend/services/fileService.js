@@ -103,7 +103,10 @@ class FileService {
       }
 
       await axios.put(uploadUrl, file, {
-        headers: headers,
+        headers: {
+          ...headers,
+          'Content-Type': file.type
+        },
         withCredentials: false,
         cancelToken: source.token,
         onUploadProgress: (progressEvent) => {

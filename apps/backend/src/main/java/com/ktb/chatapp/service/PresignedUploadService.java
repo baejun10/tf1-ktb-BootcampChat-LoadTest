@@ -175,24 +175,12 @@ public class PresignedUploadService {
 
     private Map<String, String> flattenHeaders(Map<String, List<String>> signedHeaders, String mimetype) {
         Map<String, String> headers = new HashMap<>();
-        boolean hasContentType = false;
-
-        for (Map.Entry<String, List<String>> entry : signedHeaders.entrySet()) {
-            String key = entry.getKey();
-            List<String> values = entry.getValue();
-
+        signedHeaders.forEach((key, values) -> {
             if (!values.isEmpty() && !key.equalsIgnoreCase("host")) {
                 headers.put(key, values.get(0));
-                if (key.equalsIgnoreCase("content-type")) {
-                    hasContentType = true;
-                }
             }
-        }
-
-        if (!hasContentType) {
-            headers.put("Content-Type", mimetype);
-        }
-
+        });
+        headers.putIfAbsent("Content-Type", mimetype);
         return headers;
     }
 
