@@ -13,6 +13,7 @@ import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.MessageReadStatusService;
 import com.ktb.chatapp.service.RoomCacheService;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
+import com.ktb.chatapp.websocket.socketio.UserRooms;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,7 @@ public class MessageReadHandler {
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
     private final RoomCacheService roomCacheService;
+    private final UserRooms userRooms;
     
     @OnEvent(MARK_MESSAGES_AS_READ)
     public void handleMarkAsRead(SocketIOClient client, MarkAsReadRequest data) {
@@ -49,24 +51,37 @@ public class MessageReadHandler {
             if (data == null || data.getMessageIds() == null || data.getMessageIds().isEmpty()) {
                 return;
             }
-            
-            String roomId = messageRepository.findById(data.getMessageIds().getFirst())
-                    .map(Message::getRoomId).orElse(null);
-            
+
+            String roomId = data.getRoomId();
+
             if (roomId == null || roomId.isBlank()) {
+                roomId = messageRepository.findById(data.getMessageIds().getFirst())
+                        .map(Message::getRoomId).orElse(null);
+            }
+
+            if (roomId == null || roomId.isBlank()) {
+                log.warn("Invalid room for user {} with messageIds {}", userId, data.getMessageIds());
                 client.sendEvent(ERROR, Map.of("message", "Invalid room"));
                 return;
             }
 
             //TODO : 015 : 세션 검증 과정에서 이미 사용자 정보를 보유하고 있으므로 userRepository.findById 호출을 캐시하거나 skip 하면 읽음 이벤트 처리 지연을 줄일 수 있다.
-            User user = userRepository.findById(userId).orElse(null);
-            if (user == null) {
-                client.sendEvent(ERROR, Map.of("message", "User not found"));
+            if (!userRooms.isInRoom(userId, roomId)) {
+                log.warn("User {} not in room {} (UserRooms check)", userId, roomId);
+                client.sendEvent(ERROR, Map.of("message", "Room access denied"));
                 return;
             }
 
             Room room = roomCacheService.findRoomById(roomId).orElse(null);
-            if (room == null || !room.getParticipantIds().contains(userId)) {
+            if (room == null) {
+                log.warn("Room {} not found in cache for user {}", roomId, userId);
+                client.sendEvent(ERROR, Map.of("message", "Room not found"));
+                return;
+            }
+
+            if (!room.getParticipantIds().contains(userId)) {
+                log.warn("User {} not in participants list of room {}. Participants: {}",
+                    userId, roomId, room.getParticipantIds());
                 client.sendEvent(ERROR, Map.of("message", "Room access denied"));
                 return;
             }
