@@ -90,8 +90,13 @@ public class PresignedUploadService {
     }
 
     public File finalizeUpload(String uploadId, String userId) {
+        long startTime = System.currentTimeMillis();
+
+        log.info("Finalize upload started - uploadId: {}", uploadId);
+        long step1 = System.currentTimeMillis();
         PresignedUpload upload = presignedUploadRepository.findById(uploadId)
                 .orElseThrow(() -> new RuntimeException("업로드 세션을 찾을 수 없습니다."));
+        log.info("MongoDB findById elapsed: {}ms", System.currentTimeMillis() - step1);
 
         if (!upload.getUserId().equals(userId)) {
             throw new RuntimeException("업로드를 완료할 권한이 없습니다.");
@@ -112,15 +117,20 @@ public class PresignedUploadService {
 
         long contentLength;
         try {
+            long step2 = System.currentTimeMillis();
             var headResponse = s3Client.headObject(headRequest);
             contentLength = headResponse.contentLength();
+            log.info("S3 headObject elapsed: {}ms", System.currentTimeMillis() - step2);
         } catch (NoSuchKeyException e) {
             throw new RuntimeException("S3에 업로드된 파일을 찾을 수 없습니다.", e);
         }
 
         upload.setUploadedSize(contentLength);
         upload.setStatus(PresignedUploadStatus.UPLOADED);
+
+        long step3 = System.currentTimeMillis();
         presignedUploadRepository.save(upload);
+        log.info("MongoDB save(UPLOADED) elapsed: {}ms", System.currentTimeMillis() - step3);
 
         File fileEntity = File.builder()
                 .filename(upload.getFilename())
@@ -132,11 +142,17 @@ public class PresignedUploadService {
                 .uploadDate(LocalDateTime.now())
                 .build();
 
+        long step4 = System.currentTimeMillis();
         File savedFile = fileRepository.save(fileEntity);
+        log.info("MongoDB save(File) elapsed: {}ms", System.currentTimeMillis() - step4);
 
         upload.setStatus(PresignedUploadStatus.COMPLETED);
-        presignedUploadRepository.save(upload);
 
+        long step5 = System.currentTimeMillis();
+        presignedUploadRepository.save(upload);
+        log.info("MongoDB save(COMPLETED) elapsed: {}ms", System.currentTimeMillis() - step5);
+
+        log.info("Finalize upload completed - total elapsed: {}ms", System.currentTimeMillis() - startTime);
         return savedFile;
     }
 
