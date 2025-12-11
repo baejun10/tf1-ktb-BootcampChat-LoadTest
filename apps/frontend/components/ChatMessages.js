@@ -69,6 +69,7 @@ const ChatMessages = ({
   const allMessages = useMemo(() => {
     if (!Array.isArray(messages)) return [];
 
+    //TODO 45 (MEDIUM): messages.sort 는 원본 배열을 mutate 하며 렌더마다 O(n log n) 정렬이 발생한다. 부하 테스트에서 메시지가 수천 건일 때 매 렌더마다 높은 CPU를 소모하므로 사본을 만들어 정렬 횟수를 줄여야 한다.
     return messages.sort((a, b) => {
       if (!a?.timestamp || !b?.timestamp) return 0;
       return new Date(a.timestamp) - new Date(b.timestamp);

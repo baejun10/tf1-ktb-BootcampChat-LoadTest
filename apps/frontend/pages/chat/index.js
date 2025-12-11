@@ -513,6 +513,7 @@ function ChatRoomsComponent() {
           }
         };
 
+        //TODO 46 (HIGH): socket.on 으로 리스너를 등록한 뒤 cleanup 에서 off 하지 않아 페이지 이동/새로고침 시 동일 이벤트 핸들러가 누적된다. 반드시 반환 함수에서 socket.off(event, handler)를 호출하라.
         Object.entries(handlers).forEach(([event, handler]) => {
           socket.on(event, handler);
         });

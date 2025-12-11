@@ -89,6 +89,7 @@ class FileService {
         '/api/files/presign';
 
       //TODO 35 (MEDIUM): presign → S3 PUT → finalize 요청이 직렬화되어 있어 부하 테스트 시 장시간의 네트워크 round-trip이 누적되며 TPS가 급격히 떨어진다. presign 정보를 재사용하거나 finalize를 비동기화하는 방안을 검토하라.
+      //TODO 50 (HIGH): presign 응답(uploadId, headers)을 업로드 세션 캐시에 저장해 동일 파일 재시도 시 HTTP 요청을 생략하도록 만들어 네트워크 병목을 줄여라.
       const presignResponse = await axiosInstance.post(presignUrl, {
         filename: file.name,
         mimetype: file.type,
@@ -103,6 +104,7 @@ class FileService {
         throw new Error('업로드 URL을 생성할 수 없습니다.');
       }
 
+      //TODO 51 (HIGH): 대용량 파일은 단일 PUT 대신 multipart/chunk 업로드를 활성화해 S3가 느려질 때도 개별 chunk 재시도로 전체 업로드 시간을 일정하게 유지하라.
       await axios.put(uploadUrl, file, {
         headers: {
           ...headers,
@@ -127,6 +129,7 @@ class FileService {
       const finalizeForm = new FormData();
       finalizeForm.append('uploadId', uploadId);
 
+      //TODO 52 (MEDIUM): finalize 응답을 소켓/웹훅 ack 또는 서버측 job 완료 이벤트와 대조해 실제 저장 상태를 검증하고, 실패 시 자동 재시도 큐에 넣어라.
       const response = await axiosInstance.post(finalizeUrl, finalizeForm, {
         headers: {
           'Content-Type': 'multipart/form-data'
@@ -136,6 +139,7 @@ class FileService {
       });
 
       this.activeUploads.delete(file.name);
+      //TODO 53 (MEDIUM): 업로드 실패 이벤트를 중앙 큐에 적재해 지수 백오프 재시도 또는 관리자가 확인할 수 있는 dead-letter 로깅을 구현하라.
 
       if (!response.data || !response.data.success) {
         return {
