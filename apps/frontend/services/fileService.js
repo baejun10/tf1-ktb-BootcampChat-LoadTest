@@ -81,32 +81,57 @@ class FileService {
     }
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
       const source = CancelToken.source();
       this.activeUploads.set(file.name, source);
 
-      const uploadUrl = this.baseUrl ?
-        `${this.baseUrl}/api/files/upload` :
-        '/api/files/upload';
+      const presignUrl = this.baseUrl ?
+        `${this.baseUrl}/api/files/presign` :
+        '/api/files/presign';
 
-      // token과 sessionId는 axios 인터셉터에서 자동으로 추가되므로
-      // 여기서는 명시적으로 전달하지 않아도 됩니다
-      const response = await axiosInstance.post(uploadUrl, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        },
+      const presignResponse = await axiosInstance.post(presignUrl, {
+        filename: file.name,
+        mimetype: file.type,
+        size: file.size
+      }, {
         cancelToken: source.token,
-        withCredentials: true,
+        withCredentials: true
+      });
+
+      const { uploadUrl, uploadId, headers = {} } = presignResponse.data || {};
+      if (!uploadUrl || !uploadId) {
+        throw new Error('업로드 URL을 생성할 수 없습니다.');
+      }
+
+      await axios.put(uploadUrl, file, {
+        headers: {
+          ...headers,
+          'Content-Type': file.type
+        },
+        withCredentials: false,
+        cancelToken: source.token,
         onUploadProgress: (progressEvent) => {
-          if (onProgress) {
+          if (onProgress && progressEvent.total) {
             const percentCompleted = Math.round(
               (progressEvent.loaded * 100) / progressEvent.total
             );
             onProgress(percentCompleted);
           }
         }
+      });
+
+      const finalizeUrl = this.baseUrl ?
+        `${this.baseUrl}/api/files/upload` :
+        '/api/files/upload';
+
+      const finalizeForm = new FormData();
+      finalizeForm.append('uploadId', uploadId);
+
+      const response = await axiosInstance.post(finalizeUrl, finalizeForm, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
+        cancelToken: source.token,
+        withCredentials: true
       });
 
       this.activeUploads.delete(file.name);
