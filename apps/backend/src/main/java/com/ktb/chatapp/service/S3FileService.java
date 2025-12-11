@@ -5,6 +5,7 @@ import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
+import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.util.FileUtil;
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,8 +42,8 @@ public class S3FileService implements FileService {
     private final String publicBaseUrl;
     private final FileRepository fileRepository;
     private final MessageRepository messageRepository;
+    private final RoomRepository roomRepository;
     private final S3Client s3Client;
-    private final RoomCacheService roomCacheService;
 
     public S3FileService(@Value("${storage.s3.bucket}") String bucketName,
                          @Value("${storage.s3.region}") String region,
@@ -50,8 +51,8 @@ public class S3FileService implements FileService {
                          @Value("${storage.s3.public-base-url:}") String publicBaseUrl,
                          FileRepository fileRepository,
                          MessageRepository messageRepository,
-                         S3Client s3Client,
-                         RoomCacheService roomCacheService) {
+                         RoomRepository roomRepository,
+                         S3Client s3Client) {
         Assert.hasText(bucketName, "storage.s3.bucket 설정은 필수입니다.");
         Assert.hasText(region, "storage.s3.region 설정은 필수입니다.");
 
@@ -63,8 +64,8 @@ public class S3FileService implements FileService {
         );
         this.fileRepository = fileRepository;
         this.messageRepository = messageRepository;
+        this.roomRepository = roomRepository;
         this.s3Client = s3Client;
-        this.roomCacheService = roomCacheService;
     }
 
     @Override
@@ -138,7 +139,7 @@ public class S3FileService implements FileService {
         Message message = messageRepository.findByFileId(fileEntity.getId())
                 .orElseThrow(() -> new RuntimeException("파일과 연결된 메시지를 찾을 수 없습니다"));
 
-        Room room = roomCacheService.findRoomById(message.getRoomId())
+        Room room = roomRepository.findById(message.getRoomId())
                 .orElseThrow(() -> new RuntimeException("방을 찾을 수 없습니다"));
 
         if (!room.getParticipantIds().contains(requesterId)) {

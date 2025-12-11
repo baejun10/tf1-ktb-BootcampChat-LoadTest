@@ -5,6 +5,7 @@ import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
+import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.util.FileUtil;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
@@ -35,16 +36,16 @@ public class LocalFileService implements FileService {
     private final Path fileStorageLocation;
     private final FileRepository fileRepository;
     private final MessageRepository messageRepository;
-    private final RoomCacheService roomCacheService;
+    private final RoomRepository roomRepository;
 
     public LocalFileService(@Value("${file.upload-dir:uploads}") String uploadDir,
                             FileRepository fileRepository,
                             MessageRepository messageRepository,
-                            RoomCacheService roomCacheService) {
+                            RoomRepository roomRepository) {
         this.fileRepository = fileRepository;
         this.messageRepository = messageRepository;
+        this.roomRepository = roomRepository;
         this.fileStorageLocation = Paths.get(uploadDir).toAbsolutePath().normalize();
-        this.roomCacheService = roomCacheService;
     }
 
     @PostConstruct
@@ -127,7 +128,7 @@ public class LocalFileService implements FileService {
             Message message = messageRepository.findByFileId(fileEntity.getId())
                     .orElseThrow(() -> new RuntimeException("파일과 연결된 메시지를 찾을 수 없습니다"));
 
-            Room room = roomCacheService.findRoomById(message.getRoomId())
+            Room room = roomRepository.findById(message.getRoomId())
                     .orElseThrow(() -> new RuntimeException("방을 찾을 수 없습니다"));
 
             if (!room.getParticipantIds().contains(requesterId)) {

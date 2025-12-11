@@ -43,7 +43,6 @@ class ChatMessageHandlerTest {
     @Mock private BannedWordChecker bannedWordChecker;
     @Mock private RateLimitService rateLimitService;
     private MeterRegistry meterRegistry = new SimpleMeterRegistry();
-    @Mock private RoomCacheService roomCacheService;
 
     private ChatMessageHandler handler;
 
@@ -60,8 +59,7 @@ class ChatMessageHandlerTest {
                         sessionService,
                         bannedWordChecker,
                         rateLimitService,
-                        meterRegistry,
-                        roomCacheService);
+                        meterRegistry);
     }
 
     @Test
@@ -85,7 +83,7 @@ class ChatMessageHandlerTest {
         Room room = new Room();
         room.setId("room-1");
         room.setParticipantIds(new HashSet<>(java.util.List.of("user-1")));
-        when(roomCacheService.findRoomById("room-1")).thenReturn(Optional.of(room));
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
 
         ChatMessageRequest request =
                 ChatMessageRequest.builder()
