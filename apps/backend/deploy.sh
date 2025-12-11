@@ -84,7 +84,7 @@ fi
 # 4. 헬스체크
 # ----------------------------------------------------
 HEALTH_URL="http://localhost:${APP_PORT}/api/health"
-echo ">>> 헬스체크 시작: $HEALTH_URL (최대 30초)"
+echo ">>> 헬스체크 시작: $HEALTH_URL (최대 90초)"
 
 for i in {1..30}; do
     sleep 3
