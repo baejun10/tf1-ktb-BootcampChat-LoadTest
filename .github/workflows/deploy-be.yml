@@ -10,8 +10,54 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  # 1. IP 목록 조회 및 JSON 배열 생성 Job
+  get_ips_list:
     runs-on: ubuntu-latest
+    outputs:
+      ips_json: ${{ steps.get-ips.outputs.ips_json }}
+
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Get EC2 Instances IPs and Format JSON
+        id: get-ips
+        run: |
+          TAG_NAME="chat-backend"
+          echo ">>> '$TAG_NAME' 태그를 가진 인스턴스 검색..."
+          
+          # VPC 내부 통신을 위해 Private IP 사용
+          IPS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=$TAG_NAME" "Name=instance-state-name,Values=running" \
+            --query "Reservations[*].Instances[*].PublicIpAddress" \
+            --output text)
+          
+          if [ -z "$IPS" ]; then
+            echo "Error: 실행 중인 인스턴스가 없습니다!"
+            exit 1
+          fi
+          
+          echo "Target IPs: $IPS"
+          
+          # jq -c 옵션으로 한 줄 JSON 생성
+          IPS_JSON=$(echo "$IPS" | tr '\t' '\n' | awk 'NF' | jq -R . | jq -s -c .)
+          
+          echo "ips_json=$IPS_JSON" >> $GITHUB_OUTPUT
+          echo "✅ IP 목록 JSON 변환 완료: $IPS_JSON"
+
+  # 2. 매트릭스 전략을 이용한 병렬 배포 Job
+  parallel_deploy:
+    needs: get_ips_list
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ip: ${{ fromJson(needs.get_ips_list.outputs.ips_json) }}
 
     steps:
       - name: Checkout Code
@@ -31,89 +77,104 @@ jobs:
           chmod +x mvnw
           ./mvnw clean package -DskipTests
 
-      #  AWS 접속 권한 (IP 조회용)
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      #  고정 IP 대신 태그로 10대 IP 조회
-      - name: Get EC2 Instances IPs
-        id: get-ips
-        run: |
-          TAG_NAME="chat-backend"
-          
-          echo ">>> '$TAG_NAME' 태그를 가진 인스턴스 검색..."
-          
-          IPS=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=$TAG_NAME" "Name=instance-state-name,Values=running" \
-            --query "Reservations[*].Instances[*].PublicIpAddress" \
-            --output text)
-          
-          if [ -z "$IPS" ]; then
-            echo "Error: 실행 중인 인스턴스가 없습니다!"
-            exit 1
-          fi
-          
-          echo "Target IPs: $IPS"
-          # 줄바꿈을 공백으로 변환해서 한 줄로 만듦
-          echo "ips=$(echo $IPS | tr '\n' ' ')" >> $GITHUB_OUTPUT
-
-      # 조회된 IP 목록으로 Loop 돌면서 배포 (appleboy 대신 직접 ssh/scp 사용)
-      - name: Deploy to All Instances
+      # Deploy to Instance ${{ matrix.ip }}
+      - name: Deploy to Instance ${{ matrix.ip }}
         env:
           SSH_KEY: ${{ secrets.SSH_PEM_KEY }}
           USER: ubuntu
+
+          MONGO_URI: ${{ vars.MONGO_URI }}
+          REDIS_HOST: ${{ vars.REDIS_HOST }}
+          REDIS_PORT: ${{ vars.REDIS_PORT }} # (없으면 기본값 6379 사용 가능하지만 vars에 있다면 사용)
+          PORT: ${{ vars.PORT }}
+          WS_PORT: ${{ vars.WS_PORT }}
+
+          # S3 일반 설정 (Variables)
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          S3_PUBLIC_BASE_URL: ${{ vars.S3_PUBLIC_BASE_URL }}
+          S3_BASE_DIR: ${{ vars.S3_BASE_DIR }}
+          S3_PRESIGN_EXPIRATION_SECONDS: ${{ vars.S3_PRESIGN_EXPIRATION_SECONDS }}
+
+          # S3 키 (루트 키 AWS_ACCESS_KEY_ID 사용 시)
+          S3_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+          # 보안 키
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          ENCRYPTION_SALT: ${{ secrets.ENCRYPTION_SALT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+          # 고정 값
+          S3_REGION: ${{ secrets.AWS_REGION }} # Region은 보통 Secret에 둠
+          STORAGE_PROVIDER: s3
+          CURRENT_IP: ${{ matrix.ip }}
+
         run: |
-          # SSH 키 파일 생성
           echo "$SSH_KEY" > key.pem
           chmod 600 key.pem
           
-          # IP 목록 배열로 변환
-          IP_LIST=(${{ steps.get-ips.outputs.ips }})
+          echo "--------------------------------------------------"
+          echo "🚀 Deploying to $CURRENT_IP (Matrix Job) ..."
+          echo "--------------------------------------------------"
           
-          for ip in "${IP_LIST[@]}"; do
-            echo "--------------------------------------------------"
-            echo "🚀 Deploying to $ip ..."
-            echo "--------------------------------------------------"
+          # A. JAR 파일 전송
+          scp -o StrictHostKeyChecking=no -i key.pem \
+            apps/backend/target/*.jar \
+            $USER@$CURRENT_IP:/home/ubuntu/ktb-chat-backend/temp/app.jar
           
-            # A. JAR 파일 전송
-            # apps/backend/target/*.jar 경로를 직접 지정 (strip_components 불필요)
-            scp -o StrictHostKeyChecking=no -i key.pem \
-              apps/backend/target/*.jar \
-              $USER@$ip:/home/ubuntu/ktb-chat-backend/temp/app.jar
+          # B. 배포 스크립트 전송
+          scp -o StrictHostKeyChecking=no -i key.pem \
+            apps/backend/deploy.sh \
+            $USER@$CURRENT_IP:/home/ubuntu/ktb-chat-backend/temp/deploy.sh
           
-            # B. 배포 스크립트 전송
-            # apps/backend/deploy.sh 경로를 직접 지정
-            scp -o StrictHostKeyChecking=no -i key.pem \
-              apps/backend/deploy.sh \
-              $USER@$ip:/home/ubuntu/ktb-chat-backend/temp/deploy.sh
+          # C. 원격 명령 실행
+          ssh -o StrictHostKeyChecking=no -i key.pem $USER@$CURRENT_IP "
+            # 1. 실행 권한 부여
+            chmod +x /home/ubuntu/ktb-chat-backend/temp/deploy.sh && \
+            mv /home/ubuntu/ktb-chat-backend/temp/deploy.sh /home/ubuntu/ktb-chat-backend/deploy.sh && \
           
-            # C. 원격 명령 실행 (hosts 설정 + 실행)
-            ssh -o StrictHostKeyChecking=no -i key.pem $USER@$ip "
-              # 1. 실행 권한 부여 및 이동
-              chmod +x /home/ubuntu/ktb-chat-backend/temp/deploy.sh && \
-              mv /home/ubuntu/ktb-chat-backend/temp/deploy.sh /home/ubuntu/ktb-chat-backend/deploy.sh && \
+            # 2. hosts 등록
+            if ! grep -q 'chat-mongodb-01' /etc/hosts; then
+              echo '>>> [Auto-Config] MongoDB IP 등록...'
+              echo '10.0.101.147  chat-mongodb-01' | sudo tee -a /etc/hosts
+              echo '10.0.101.206  chat-mongodb-02' | sudo tee -a /etc/hosts
+              echo '10.0.101.249  chat-mongodb-03' | sudo tee -a /etc/hosts
+            fi && \
           
-              # 2. [필수] /etc/hosts 몽고디비 IP 자동 등록
-              if ! grep -q 'chat-mongodb-01' /etc/hosts; then
-                echo '>>> [Auto-Config] MongoDB IP 등록...'
-                echo '10.0.101.147  chat-mongodb-01' | sudo tee -a /etc/hosts
-                echo '10.0.101.206  chat-mongodb-02' | sudo tee -a /etc/hosts
-                echo '10.0.101.249  chat-mongodb-03' | sudo tee -a /etc/hosts
-              fi && \
+            # 3. .env 파일 재생성 (따옴표 필수!)
+            echo '>>> [Auto-Config] .env 파일 재생성...'
+            cat << EOF | sudo tee /home/ubuntu/ktb-chat-backend/.env
+          STORAGE_PROVIDER=\"$STORAGE_PROVIDER\"
+          MONGO_URI=\"$MONGO_URI\"
+          REDIS_HOST=\"$REDIS_HOST\"
+          REDIS_PORT=$REDIS_PORT
+          PORT=$PORT
+          WS_PORT=$WS_PORT
           
-              # 3. 실제 배포 스크립트 실행
-              /home/ubuntu/ktb-chat-backend/deploy.sh
-            "
+          S3_BUCKET=\"$S3_BUCKET\"
+          S3_REGION=\"$S3_REGION\"
+          S3_ACCESS_KEY=\"$S3_ACCESS_KEY\"
+          S3_SECRET_KEY=\"$S3_SECRET_KEY\"
+          S3_PUBLIC_BASE_URL=\"$S3_PUBLIC_BASE_URL\"
+          S3_BASE_DIR=\"$S3_BASE_DIR\"
+          S3_PRESIGN_EXPIRATION_SECONDS=$S3_PRESIGN_EXPIRATION_SECONDS
           
-            if [ $? -eq 0 ]; then
-               echo "✅ $ip 배포 성공"
-            else
-               echo "❌ $ip 배포 실패"
-               exit 1
-            fi
-          done
+          JWT_SECRET=\"$JWT_SECRET\"
+          ENCRYPTION_KEY=\"$ENCRYPTION_KEY\"
+          ENCRYPTION_SALT=\"$ENCRYPTION_SALT\"
+          OPENAI_API_KEY=\"$OPENAI_API_KEY\"
+          EOF
+          
+            # 4. 배포 스크립트 실행
+            /home/ubuntu/ktb-chat-backend/deploy.sh
+          "
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ $CURRENT_IP 배포 성공"
+          else
+            echo "❌ $CURRENT_IP 배포 실패"
+            exit 1
+          fi
+          
           rm key.pem
