@@ -7,6 +7,7 @@ import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.UserRepository;
+import com.ktb.chatapp.service.FileCacheService;
 import com.ktb.chatapp.service.MessageReadStatusService;
 import net.datafaker.Faker;
 import org.jetbrains.annotations.NotNull;
@@ -39,6 +40,9 @@ class MessageLoaderTest {
     
     @Mock
     private FileRepository fileRepository;
+
+    @Mock
+    private FileCacheService fileCacheService;
     
     @Mock
     private MessageReadStatusService messageReadStatusService;
@@ -60,7 +64,8 @@ class MessageLoaderTest {
         messageLoader = new MessageLoader(
                 messageRepository,
                 userRepository,
-                new MessageResponseMapper(fileRepository),
+                new MessageResponseMapper(),
+                fileCacheService,
                 messageReadStatusService
         );
         

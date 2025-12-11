@@ -3,10 +3,12 @@ package com.ktb.chatapp.websocket.socketio.handler;
 import com.ktb.chatapp.dto.FetchMessagesRequest;
 import com.ktb.chatapp.dto.FetchMessagesResponse;
 import com.ktb.chatapp.dto.MessageResponse;
+import com.ktb.chatapp.model.File;
 import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.UserRepository;
+import com.ktb.chatapp.service.FileCacheService;
 import com.ktb.chatapp.service.MessageReadStatusService;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -31,6 +33,7 @@ public class MessageLoader {
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
     private final MessageResponseMapper messageResponseMapper;
+    private final FileCacheService fileCacheService;
     private final MessageReadStatusService messageReadStatusService;
 
     private static final int BATCH_SIZE = 30;
@@ -95,10 +98,15 @@ public class MessageLoader {
         List<String> messageIds = new ArrayList<>(sortedMessages.size());
         List<String> senderIds = new ArrayList<>(sortedMessages.size());
 
+        List<String> fileIds = new ArrayList<>(sortedMessages.size());
+
         for (Message message : sortedMessages) {
             messageIds.add(message.getId());
             if (message.getSenderId() != null) {
                 senderIds.add(message.getSenderId());
+            }
+            if (message.getFileId() != null) {
+                fileIds.add(message.getFileId());
             }
         }
 
@@ -109,11 +117,18 @@ public class MessageLoader {
         Map<String, User> userMap = userRepository.findAllById(senderIds).stream()
                 .collect(Collectors.toMap(User::getId, user -> user));
 
-        /// [개선 014] Map에서 User 정보를 O(1)로 조회하여 MessageResponse 생성
+        Map<String, File> fileMap = fileCacheService.getFiles(fileIds);
+
+        /// [개선 014] Map에서 User 정보를 O(1)로 조회하여 MessageResponse 생성 + File cache 활용
+        /// [개선 018] : mapToMessageResponse을 사용하는 곳으로 파일 캐싱으로 해결
         List<MessageResponse> messageResponses = sortedMessages.stream()
                 .map(message -> {
                     var user = userMap.get(message.getSenderId());
-                    return messageResponseMapper.mapToMessageResponse(message, user);
+                    return messageResponseMapper.mapToMessageResponse(
+                            message,
+                            user,
+                            fileMap.get(message.getFileId())
+                    );
                 })
                 .collect(Collectors.toList());
 
