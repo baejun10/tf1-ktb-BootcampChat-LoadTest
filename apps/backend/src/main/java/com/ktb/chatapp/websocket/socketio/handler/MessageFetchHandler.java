@@ -6,6 +6,7 @@ import com.ktb.chatapp.dto.FetchMessagesRequest;
 import com.ktb.chatapp.dto.FetchMessagesResponse;
 import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.repository.RoomRepository;
+import com.ktb.chatapp.service.RoomCacheService;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ public class MessageFetchHandler {
 
     private final RoomRepository roomRepository;
     private final MessageLoader messageLoader;
+    private final RoomCacheService roomCacheService;
 
     @OnEvent(FETCH_PREVIOUS_MESSAGES)
     public void handleFetchMessages(SocketIOClient client, FetchMessagesRequest data) {
@@ -42,7 +44,7 @@ public class MessageFetchHandler {
         
         try {
             // 권한 체크
-            Room room = roomRepository.findById(data.roomId()).orElse(null);
+            Room room = roomCacheService.findRoomById(data.roomId()).orElse(null);
             if (room == null || !room.getParticipantIds().contains(userId)) {
                 client.sendEvent(ERROR, Map.of(
                         "code", "LOAD_ERROR",

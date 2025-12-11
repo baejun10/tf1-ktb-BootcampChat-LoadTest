@@ -9,9 +9,9 @@ import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
-import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.MessageReadStatusService;
+import com.ktb.chatapp.service.RoomCacheService;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -34,8 +34,8 @@ public class MessageReadHandler {
     private final SocketIOServer socketIOServer;
     private final MessageReadStatusService messageReadStatusService;
     private final MessageRepository messageRepository;
-    private final RoomRepository roomRepository;
     private final UserRepository userRepository;
+    private final RoomCacheService roomCacheService;
     
     @OnEvent(MARK_MESSAGES_AS_READ)
     public void handleMarkAsRead(SocketIOClient client, MarkAsReadRequest data) {
@@ -65,7 +65,7 @@ public class MessageReadHandler {
                 return;
             }
 
-            Room room = roomRepository.findById(roomId).orElse(null);
+            Room room = roomCacheService.findRoomById(roomId).orElse(null);
             if (room == null || !room.getParticipantIds().contains(userId)) {
                 client.sendEvent(ERROR, Map.of("message", "Room access denied"));
                 return;
