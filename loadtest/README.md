@@ -58,6 +58,8 @@ npm install
 
 ## 사용법
 
+> 기본값 안내: `load-test.js`와 `ramp-up-test.js`는 별도 옵션 없이 실행하면 운영 API(`https://api.chat.goorm-ktb-001.goorm.team`)에 연결합니다. 다른 환경을 테스트하려면 `--api-url`, `--socket-url` 옵션으로 주소를 재지정하세요.
+
 ### 1. 백엔드 서버 구동
 
 ```bash
