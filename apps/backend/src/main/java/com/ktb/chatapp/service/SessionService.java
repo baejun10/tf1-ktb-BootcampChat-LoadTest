@@ -58,9 +58,8 @@ public class SessionService {
 
             session = sessionStore.save(session);
 
-            cacheRepository.save(getCacheKey(userId), session, Duration.ofSeconds(SESSION_TTL_SEC));
-
             SessionData sessionData = toSessionData(session);
+            cacheRepository.save(getCacheKey(userId), sessionData, Duration.ofSeconds(SESSION_TTL_SEC));
 
             return SessionCreationResult.builder()
                     .sessionId(sessionId)
@@ -82,33 +81,33 @@ public class SessionService {
             }
 
             String cacheKey = getCacheKey(userId);
-            Session session = cacheRepository.get(cacheKey, Session.class);
+            SessionData sessionData = cacheRepository.get(cacheKey, SessionData.class);
 
-            if (session == null) {
-                session = sessionStore.findByUserId(userId).orElse(null);
+            if (sessionData == null) {
+                Session session = sessionStore.findByUserId(userId).orElse(null);
                 if (session != null) {
-                    cacheRepository.save(cacheKey, session, Duration.ofSeconds(SESSION_TTL_SEC));
+                    sessionData = toSessionData(session);
+                    cacheRepository.save(cacheKey, sessionData, Duration.ofSeconds(SESSION_TTL_SEC));
                 }
             }
 
-            if (session == null) {
+            if (sessionData == null) {
                 log.warn("No session found for userId: {}", userId);
                 return SessionValidationResult.invalid("INVALID_SESSION", "세션을 찾을 수 없습니다.");
             }
 
-            if (!sessionId.equals(session.getSessionId())) {
-                log.warn("Session ID mismatch for userId: {}. Provided: {}, Expected: {}", userId, sessionId, session.getSessionId());
+            if (!sessionId.equals(sessionData.getSessionId())) {
+                log.warn("Session ID mismatch for userId: {}. Provided: {}, Expected: {}", userId, sessionId, sessionData.getSessionId());
                 return SessionValidationResult.invalid("INVALID_SESSION", "잘못된 세션 ID입니다.");
             }
 
             long now = Instant.now().toEpochMilli();
-            if (now - session.getLastActivity() > SESSION_TIMEOUT) {
+            if (now - sessionData.getLastActivity() > SESSION_TIMEOUT) {
                 log.warn("Session timed out for userId: {}, sessionId: {}", userId, sessionId);
                 removeSession(userId, sessionId);
                 return SessionValidationResult.invalid("SESSION_EXPIRED", "세션이 만료되었습니다.");
             }
 
-            SessionData sessionData = toSessionData(session);
             return SessionValidationResult.valid(sessionData);
 
         } catch (Exception e) {
@@ -125,11 +124,16 @@ public class SessionService {
             }
 
             String cacheKey = getCacheKey(userId);
-            Session session = cacheRepository.get(cacheKey, Session.class);
+            SessionData cachedSessionData = cacheRepository.get(cacheKey, SessionData.class);
 
-            if (session == null) {
-                session = sessionStore.findByUserId(userId).orElse(null);
+            if (cachedSessionData != null) {
+                long now = Instant.now().toEpochMilli();
+                if (now - cachedSessionData.getLastActivity() < 30000) {
+                    return;
+                }
             }
+
+            Session session = sessionStore.findByUserId(userId).orElse(null);
 
             if (session == null) {
                 log.debug("No session found to update last activity for user: {}", userId);
@@ -145,7 +149,8 @@ public class SessionService {
             session.setExpiresAt(Instant.now().plusSeconds(SESSION_TTL_SEC));
             sessionStore.save(session);
 
-            cacheRepository.save(cacheKey, session, Duration.ofSeconds(SESSION_TTL_SEC));
+            SessionData updatedSessionData = toSessionData(session);
+            cacheRepository.save(cacheKey, updatedSessionData, Duration.ofSeconds(SESSION_TTL_SEC));
 
         } catch (Exception e) {
             log.error("Failed to update session activity for user: {}", userId, e);
@@ -183,20 +188,17 @@ public class SessionService {
     SessionData getActiveSession(String userId) {
         try {
             String cacheKey = getCacheKey(userId);
-            Session session = cacheRepository.get(cacheKey, Session.class);
+            SessionData sessionData = cacheRepository.get(cacheKey, SessionData.class);
 
-            if (session == null) {
-                session = sessionStore.findByUserId(userId).orElse(null);
+            if (sessionData == null) {
+                Session session = sessionStore.findByUserId(userId).orElse(null);
                 if (session != null) {
-                    cacheRepository.save(cacheKey, session, Duration.ofSeconds(SESSION_TTL_SEC));
+                    sessionData = toSessionData(session);
+                    cacheRepository.save(cacheKey, sessionData, Duration.ofSeconds(SESSION_TTL_SEC));
                 }
             }
 
-            if (session == null) {
-                return null;
-            }
-
-            return toSessionData(session);
+            return sessionData;
         } catch (Exception e) {
             log.error("Get active session error for userId: {}", userId, e);
             return null;
