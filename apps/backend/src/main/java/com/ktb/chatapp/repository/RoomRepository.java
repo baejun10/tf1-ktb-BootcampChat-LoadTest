@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 @Repository
-public interface RoomRepository extends MongoRepository<Room, String> {
+public interface RoomRepository extends MongoRepository<Room, String>, RoomCustomRepository {
 
     // 페이지네이션과 함께 모든 방 조회
     Page<Room> findAll(Pageable pageable);
