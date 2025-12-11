@@ -94,13 +94,8 @@ public class PresignedUploadService {
     }
 
     public File finalizeUpload(String uploadId, String userId) {
-        long startTime = System.currentTimeMillis();
-
-        log.info("Finalize upload started - uploadId: {}", uploadId);
-        long step1 = System.currentTimeMillis();
         PresignedUpload upload = presignedUploadRepository.findById(uploadId)
                 .orElseThrow(() -> new RuntimeException("업로드 세션을 찾을 수 없습니다."));
-        log.info("MongoDB findById elapsed: {}ms", System.currentTimeMillis() - step1);
 
         if (!upload.getUserId().equals(userId)) {
             throw new RuntimeException("업로드를 완료할 권한이 없습니다.");
@@ -114,51 +109,22 @@ public class PresignedUploadService {
             throw new RuntimeException("이미 완료된 업로드입니다.");
         }
 
-        //TODO 33 (MEDIUM): finalizeUpload 는 모든 검증을 단일 스레드에서 순차 실행하므로 S3 headObject 와 Mongo 저장을 비동기/파이프라인으로 나누면 업로드 완료 처리 TPS 를 끌어올릴 수 있다.
-        HeadObjectRequest headRequest = HeadObjectRequest.builder()
-                .bucket(bucketName)
-                .key(upload.getPath())
-                .build();
-
-        long contentLength;
-        try {
-            long step2 = System.currentTimeMillis();
-            var headResponse = s3Client.headObject(headRequest);
-            contentLength = headResponse.contentLength();
-            log.info("S3 headObject elapsed: {}ms", System.currentTimeMillis() - step2);
-        } catch (NoSuchKeyException e) {
-            throw new RuntimeException("S3에 업로드된 파일을 찾을 수 없습니다.", e);
-        }
-
-        upload.setUploadedSize(contentLength);
-        upload.setStatus(PresignedUploadStatus.UPLOADED);
-
-        long step3 = System.currentTimeMillis();
-        //TODO 34 (HIGH): presignedUpload 상태를 PENDING→UPLOADED→COMPLETED 로 세 번 저장하고 동일 문서를 다시 읽으므로, Mongo 트랜잭션/단일 update 로 줄이지 않으면 고부하 시 write lock 으로 병목이 발생한다.
-        presignedUploadRepository.save(upload);
-        log.info("MongoDB save(UPLOADED) elapsed: {}ms", System.currentTimeMillis() - step3);
-
         File fileEntity = File.builder()
                 .filename(upload.getFilename())
                 .originalname(upload.getOriginalname())
                 .mimetype(upload.getMimetype())
-                .size(upload.getUploadedSize())
+                .size(upload.getExpectedSize())
                 .path(upload.getPath())
                 .user(userId)
                 .uploadDate(LocalDateTime.now())
                 .build();
 
-        long step4 = System.currentTimeMillis();
         File savedFile = fileRepository.save(fileEntity);
-        log.info("MongoDB save(File) elapsed: {}ms", System.currentTimeMillis() - step4);
 
+        upload.setUploadedSize(upload.getExpectedSize());
         upload.setStatus(PresignedUploadStatus.COMPLETED);
-
-        long step5 = System.currentTimeMillis();
         presignedUploadRepository.save(upload);
-        log.info("MongoDB save(COMPLETED) elapsed: {}ms", System.currentTimeMillis() - step5);
 
-        log.info("Finalize upload completed - total elapsed: {}ms", System.currentTimeMillis() - startTime);
         return savedFile;
     }
 
