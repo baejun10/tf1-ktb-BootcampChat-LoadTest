@@ -35,18 +35,21 @@ public class RedisConfig {
 
         @SuppressWarnings("rawtypes")
         GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
-        poolConfig.setMaxTotal(100);
-        poolConfig.setMaxIdle(50);
-        poolConfig.setMinIdle(10);
-        poolConfig.setMaxWait(Duration.ofSeconds(3));
-        poolConfig.setTestOnBorrow(true);
+        poolConfig.setMaxTotal(500);
+        poolConfig.setMaxIdle(200);
+        poolConfig.setMinIdle(50);
+        poolConfig.setMaxWait(Duration.ofMillis(500));
+        poolConfig.setTestOnBorrow(false);
         poolConfig.setTestOnReturn(false);
         poolConfig.setTestWhileIdle(true);
-        poolConfig.setTimeBetweenEvictionRuns(Duration.ofSeconds(30));
+        poolConfig.setTimeBetweenEvictionRuns(Duration.ofSeconds(60));
+        poolConfig.setMinEvictableIdleDuration(Duration.ofMinutes(5));
+        poolConfig.setBlockWhenExhausted(true);
 
         SocketOptions socketOptions = SocketOptions.builder()
-                .connectTimeout(Duration.ofSeconds(3))
+                .connectTimeout(Duration.ofMillis(1500))
                 .keepAlive(true)
+                .tcpNoDelay(true)
                 .build();
 
         ClientOptions clientOptions = ClientOptions.builder()
@@ -55,15 +58,15 @@ public class RedisConfig {
                 .build();
 
         LettucePoolingClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
-                .commandTimeout(Duration.ofSeconds(5))
+                .commandTimeout(Duration.ofMillis(2000))
                 .poolConfig(poolConfig)
                 .clientOptions(clientOptions)
                 .shutdownTimeout(Duration.ofMillis(100))
                 .build();
 
         LettuceConnectionFactory factory = new LettuceConnectionFactory(config, clientConfig);
-        factory.setShareNativeConnection(false);
-        factory.setValidateConnection(true);
+        factory.setShareNativeConnection(true);
+        factory.setValidateConnection(false);
         factory.afterPropertiesSet();
         return factory;
     }
