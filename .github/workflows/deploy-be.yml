@@ -33,7 +33,6 @@ jobs:
           
           echo ">>> '$TAG_NAME' 태그를 가진 인스턴스 검색..."
           
-          # Private IP로 검색 (VPC 내 통신을 위해 Private IP 사용을 권장)
           IPS=$(aws ec2 describe-instances \
             --filters "Name=tag:Name,Values=$TAG_NAME" "Name=instance-state-name,Values=running" \
             --query "Reservations[*].Instances[*].PrivateIpAddress" \
@@ -46,9 +45,9 @@ jobs:
           
           echo "Target IPs: $IPS"
           
-          # 줄바꿈된 IP 목록을 JSON 배열 형태로 변환하여 출력 (병렬 Job으로 전달)
-          IPS_JSON=$(echo "$IPS" | tr '\t' '\n' | awk 'NF' | jq -R . | jq -s .)
+          IPS_JSON=$(echo "$IPS" | tr '\t' '\n' | awk 'NF' | jq -R . | jq -s -c .)
           
+          # GitHub Actions의 출력 변수 설정 방식 변경: $GITHUB_OUTPUT 사용 (이미 적용됨)
           echo "ips_json=$IPS_JSON" >> $GITHUB_OUTPUT
           echo "✅ IP 목록 JSON 변환 완료: $IPS_JSON"
 
