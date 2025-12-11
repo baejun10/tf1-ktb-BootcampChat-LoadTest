@@ -522,7 +522,7 @@ function ChatRoomsComponent() {
         if (!isSubscribed) return;
 
         if (error.message?.includes('Authentication required') ||
-            error.message?.includes('Invalid session')) {
+          error.message?.includes('Invalid session')) {
           // Auth error will be handled by the useAuth context
         }
 
@@ -578,6 +578,22 @@ function ChatRoomsComponent() {
       setJoiningRoom(false);
     }
   };
+
+  // 쿼리 파라미터로 전달된 room ID가 있으면 자동으로 입장 시도
+  const hasAutoJoinedRef = useRef(false);
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const { room: roomId } = router.query;
+
+    if (roomId &&
+      connectionStatus === CONNECTION_STATUS.CONNECTED &&
+      !hasAutoJoinedRef.current) {
+
+      hasAutoJoinedRef.current = true;
+      handleJoinRoom(roomId);
+    }
+  }, [router.isReady, router.query, connectionStatus, handleJoinRoom]);
 
   const renderRoomsTable = () => {
     if (!rooms || rooms.length === 0) return null;
@@ -711,7 +727,7 @@ function ChatRoomsComponent() {
           </HStack>
         </VStack>
 
-        
+
         {error && (
           <Callout
             color={error.type === 'danger' ? 'danger' : error.type === 'warning' ? 'warning' : 'primary'}
