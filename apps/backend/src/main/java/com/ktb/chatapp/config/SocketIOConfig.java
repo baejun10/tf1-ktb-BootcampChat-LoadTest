@@ -6,10 +6,12 @@ import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.annotation.SpringAnnotationScanner;
 import com.corundumstudio.socketio.namespace.Namespace;
 import com.corundumstudio.socketio.protocol.JacksonJsonSupport;
-import com.corundumstudio.socketio.store.MemoryStoreFactory;
+import com.corundumstudio.socketio.store.RedissonStoreFactory;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ktb.chatapp.websocket.socketio.ChatDataStore;
-import com.ktb.chatapp.websocket.socketio.LocalChatDataStore;
+import com.ktb.chatapp.websocket.socketio.RedisChatDataStore;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,11 +36,11 @@ public class SocketIOConfig {
     @Value("${socketio.server.port:5002}")
     private Integer port;
 
-    @Value("${socketio.store.redis.enabled:true}")
-    private Boolean redisStoreEnabled;
-
-    @Autowired(required = false)
+    @Autowired
     private RedissonClient redissonClient;
+
+    @Autowired
+    private org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
 
     @Bean(initMethod = "start", destroyMethod = "stop")
     public SocketIOServer socketIOServer(AuthTokenListener authTokenListener) {
@@ -62,8 +64,9 @@ public class SocketIOConfig {
         config.setUpgradeTimeout(10000);
 
         config.setJsonSupport(new JacksonJsonSupport(new JavaTimeModule()));
-        //TODO : 003 : MemoryStoreFactory 는 단일 노드에서만 안전하므로 Redis 기반 StoreFactory 로 교체하면 수평 확장 시 세션 동기화/성능이 개선된다.
-        config.setStoreFactory(new MemoryStoreFactory()); // 단일노드 전용
+        Objects.requireNonNull(redissonClient, "RedissonClient is required for Redis-backed Socket.IO");
+        config.setStoreFactory(new RedissonStoreFactory(redissonClient));
+        log.info("Socket.IO server configured with RedissonStoreFactory (Redis mode enforced)");
 
         log.info("Socket.IO server configured on {}:{} with {} boss threads and {} worker threads",
                  host, port, config.getBossThreads(), config.getWorkerThreads());
@@ -85,10 +88,9 @@ public class SocketIOConfig {
         return new SpringAnnotationScanner(socketIOServer);
     }
     
-    // 인메모리 저장소, 단일 노드 환경에서만 사용
     @Bean
     @ConditionalOnProperty(name = "socketio.enabled", havingValue = "true", matchIfMissing = true)
     public ChatDataStore chatDataStore() {
-        return new LocalChatDataStore();
+        return new RedisChatDataStore(redisTemplate, new ObjectMapper().registerModule(new JavaTimeModule()));
     }
 }
