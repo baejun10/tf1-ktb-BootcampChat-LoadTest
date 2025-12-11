@@ -246,29 +246,32 @@ public class RoomService {
     }
 
     public RoomResponse joinRoom(String roomId, String password, String name) {
-        Optional<Room> roomOpt = roomRepository.findById(roomId);
-        if (roomOpt.isEmpty()) {
+        // Room: participantIds 없이 조회
+        Optional<Room> roomWithoutParticipantsOpt = roomRepository.findWithoutParticipantIds(roomId);
+        if (roomWithoutParticipantsOpt.isEmpty()) {
             return null;
         }
 
-        Room room = roomOpt.get();
-        User user = userRepository.findByEmail(name)
-            .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + name));
+        Room roomWithoutParticipants = roomWithoutParticipantsOpt.get();
 
-        if (room.isHasPassword()) {
-            if (password == null || !passwordEncoder.matches(password, room.getPassword())) {
+        User user = userRepository.findByEmail(name)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + name));
+
+        // 참여자 ID만 다시 조회
+        Set<String> participantIds = roomRepository.findParticipantIdsOnly(roomId)
+                .map(Room::getParticipantIds)
+                .orElse(Set.of());
+
+        if (roomWithoutParticipants.isHasPassword()) {
+            if (password == null || !passwordEncoder.matches(password, roomWithoutParticipants.getPassword())) {
                 throw new RuntimeException("비밀번호가 일치하지 않습니다.");
             }
         }
 
-        if (!room.getParticipantIds().contains(user.getId())) {
-            //TODO : 021 : 참가자 추가를 전체 Room 문서를 읽고 저장하는 대신 Mongo $addToSet 업데이트로 처리하면 경합과 write volume 을 줄일 수 있다.
-            roomRepository.addParticipant(roomId, user.getId());
-            roomOpt = roomRepository.findById(roomId);
-            room = roomOpt.orElse(room);
-        }
+        //TODO : 021 : 참가자 추가를 전체 Room 문서를 읽고 저장하는 대신 Mongo $addToSet 업데이트로 처리하면 경합과 write volume 을 줄일 수 있다.
+        roomRepository.addParticipant(roomId, user.getId());
 
-        RoomResponse roomResponse = buildSingleRoomResponse(room, name);
+        RoomResponse roomResponse = buildSingleRoomResponse(roomWithoutParticipants, name, participantIds);
 
         try {
             eventPublisher.publishEvent(new RoomUpdatedEvent(this, roomId, roomResponse));
@@ -311,17 +314,32 @@ public class RoomService {
     }
 
     private RoomResponse buildSingleRoomResponse(Room room, String name) {
+        return buildRoomResponseInternal(room, name, null);
+    }
 
-        // creator는 단일 find
+    private RoomResponse buildSingleRoomResponse(Room room, String name, Set<String> participantIds) {
+        return buildRoomResponseInternal(room, name, participantIds);
+    }
+
+    private RoomResponse buildRoomResponseInternal(Room room,
+                                                   String name,
+                                                   Collection<String> participantIdsOverride) {
+
+        // 1. creator 조회
         User creator = null;
         if (room.getCreator() != null) {
             creator = userRepository.findById(room.getCreator()).orElse(null);
         }
 
-        // participants는 $in 배치 쿼리
-        List<User> participants = userRepository.findByIdIn(room.getParticipantIds());
+        // 2. participantIds 결정
+        Collection<String> participantIds = participantIdsOverride != null
+                ? participantIdsOverride
+                : room.getParticipantIds();
 
-        // recentMessageCount는 단일 쿼리
+        // 3. participants 조회 (projection)
+        List<User> participants = userRepository.findSimpleUsersByIdIn(participantIds);
+
+        // 4. recentMessageCount 조회
         long recentMessageCount = messageRepository.countRecentMessagesByRoomId(room.getId(), tenMinutesAgo);
 
         boolean isCreator = creator != null && creator.getId().equals(name);
