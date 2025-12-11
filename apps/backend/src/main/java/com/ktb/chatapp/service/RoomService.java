@@ -36,7 +36,6 @@ public class RoomService {
     private final MessageRepository messageRepository;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
-    private final RoomCacheService roomCacheService;
 
     private static final LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
 
@@ -242,12 +241,12 @@ public class RoomService {
     }
 
     public RoomResponse findRoomById(String roomId, String name) {
-        Optional<Room> roomOpt = roomCacheService.findRoomById(roomId);
+        Optional<Room> roomOpt = roomRepository.findById(roomId);
         return roomOpt.map(room -> buildSingleRoomResponse(room, name)).orElse(null);
     }
 
     public RoomResponse joinRoom(String roomId, String password, String name) {
-        Optional<Room> roomOpt = roomCacheService.findRoomById(roomId);
+        Optional<Room> roomOpt = roomRepository.findById(roomId);
         if (roomOpt.isEmpty()) {
             return null;
         }
@@ -264,8 +263,8 @@ public class RoomService {
 
         if (!room.getParticipantIds().contains(user.getId())) {
             //TODO : 021 : 참가자 추가를 전체 Room 문서를 읽고 저장하는 대신 Mongo $addToSet 업데이트로 처리하면 경합과 write volume 을 줄일 수 있다.
-            roomCacheService.addParticipant(roomId, user.getId());
-            roomOpt = roomCacheService.findRoomById(roomId);
+            roomRepository.addParticipant(roomId, user.getId());
+            roomOpt = roomRepository.findById(roomId);
             room = roomOpt.orElse(room);
         }
 
