@@ -51,7 +51,7 @@ const validateCredentials = (credentials) => {
 
 // 재시도 딜레이 계산
 const getRetryDelay = (retryCount) => {
-  const delay = RETRY_CONFIG.baseDelay * 
+  const delay = RETRY_CONFIG.baseDelay *
     Math.pow(RETRY_CONFIG.backoffFactor, retryCount) *
     (1 + Math.random() * 0.1);
   return Math.min(delay, RETRY_CONFIG.maxDelay);
@@ -167,18 +167,29 @@ class AuthService {
    */
   async register(userData) {
     try {
-      const response = await api.post('/api/auth/register', userData);
+      // 페이지 이동시에도 요청이 유지되도록 fetch + keepalive 사용
+      const response = await fetch(`${API_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(userData),
+        keepalive: true
+      });
 
-      if (response.data?.success) {
-        return response.data;
+      const data = await response.json();
+
+      if (response.ok && data?.success) {
+        return data;
       }
 
-      throw new Error(response.data?.message || '회원가입에 실패했습니다.');
+      throw new Error(data?.message || '회원가입에 실패했습니다.');
     } catch (error) {
-      throw this._handleError(error);
+      throw error;
     }
   }
-  
+
   /**
    * 프로필 업데이트 API 호출
    * 상태 업데이트는 AuthContext에서 처리
@@ -256,7 +267,7 @@ class AuthService {
 
       throw this._handleError(error);
     }
-  }  
+  }
 
   /**
    * @deprecated getCurrentUser는 더 이상 사용하지 않습니다.
@@ -318,18 +329,18 @@ class AuthService {
       if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
         throw new Error('서버 응답 시간이 초과되었습니다.');
       }
-      
+
       if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
         throw new Error('네트워크 연결을 확인해주세요.');
       }
-      
+
       throw this._handleError(error);
     }
   }
 
   _handleError(error) {
     if (error.isNetworkError) return error;
-    
+
     if (axios.isAxiosError(error)) {
       if (!error.response) {
         return new Error('서버와 통신할 수 없습니다. 네트워크 연결을 확인해주세요.');
