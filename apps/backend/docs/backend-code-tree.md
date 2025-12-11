@@ -69,7 +69,7 @@ L-- uploads/ ................ 로컬 개발 시 사용 가능한 임시 저장�
 
 ### 2.4 파일 & 업로드
 - `controller/FileController.java` — 업로드/다운로드/뷰/삭제 API, Presigned URL 발급, 인증 사용자 검증.
-- `service/FileService.java` + `service/S3FileService.java` — 파일 보안 검증, 안전 파일명 생성, S3 객체 업로드/삭제, 메시지/방 권한 체크.
+- `service/FileService.java` + `service/S3FileService.java`/`service/LocalFileService.java` — storage.provider=s3일 땐 S3, local일 땐 로컬 디스크를 사용해 파일을 저장/삭제한다.
 - `repository/FileRepository.java`, `model/File.java`, `dto/FileResponse.java`, `service/FileUploadResult.java` — 파일 메타데이터 저장 및 응답 모델.
 - `service/PresignedUploadService.java`, `model/PresignedUpload*.java`, `repository/PresignedUploadRepository.java` — Presigned 업로드 세션 관리 및 완료 처리.
 

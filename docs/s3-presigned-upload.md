@@ -6,7 +6,7 @@
 - 기존 multipart 업로드도 호환되도록 하여 회귀 위험을 최소화.
 
 ## 2. 전체 흐름
-1. 프론트(`apps/frontend/services/fileService.js:77-175`)가 파일 선택 후 `/api/files/presign`에 파일명/MIME/크기 정보를 POST.
+1. 프론트(`apps/frontend/services/fileService.js:77-175`)가 파일 선택 후 `/api/files/presign`에 파일명/MIME/크기 정보를 POST. (서버 `.env`에서 `STORAGE_PROVIDER=s3`로 설정되어 있어야 S3FileService가 활성화된다.)
 2. 백엔드 `FileController#createPresignedUpload`(`apps/backend/src/main/java/com/ktb/chatapp/controller/FileController.java:59-71`)가 인증 사용자 확인 → `PresignedUploadService` 호출.
 3. `PresignedUploadService`(`apps/backend/src/main/java/com/ktb/chatapp/service/PresignedUploadService.java`)가
    - `FileUtil.validateFileMetadata`로 사전 검증 (`apps/backend/src/main/java/com/ktb/chatapp/util/FileUtil.java:46-82`)

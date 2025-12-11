@@ -23,6 +23,7 @@
 ## 3. 환경 변수 / 비밀 관리
 | 키 | 설명 | 예시 |
 | --- | --- | --- |
+| `STORAGE_PROVIDER` | `s3`로 설정해야 S3FileService 사용(로컬 개발은 `local`) | `s3` |
 | `S3_BUCKET` | 업로드 대상 버킷 이름 | `bootcamp-chat-files` |
 | `S3_REGION` | AWS 리전 | `ap-northeast-2` |
 | `S3_ENDPOINT` | (옵션) S3 호환 스토리지 사용 시 커스텀 endpoint | `https://s3.ap-northeast-2.amazonaws.com` |
