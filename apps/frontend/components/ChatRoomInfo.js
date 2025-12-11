@@ -47,7 +47,8 @@ const ChatRoomInfo = ({ room, connectionStatus }) => {
                 <div className="flex -space-x-2">
                   {participants.slice(0, maxVisibleAvatars).map((participant, index) => (
                     <div
-                      key={participant._id}
+                      // key={participant._id}
+                      key={`avatar-${participant._id}`}
                       className="ring-1 rounded-full"
                       style={{ zIndex: maxVisibleAvatars - index }}
                     >
