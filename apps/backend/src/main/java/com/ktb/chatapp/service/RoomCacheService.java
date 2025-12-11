@@ -8,6 +8,8 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Slf4j
 @RequiredArgsConstructor
 @Service
@@ -17,8 +19,8 @@ public class RoomCacheService {
 
     // Room 조회 결과를 캐시
     @Cacheable(value = "rooms", key = "#roomId", unless = "#result == null")
-    public Room findRoomById(String roomId) {
-        return roomRepository.findById(roomId).orElse(null);
+    public Optional<Room> findRoomById(String roomId) {
+        return roomRepository.findById(roomId);
     }
 
     // 참가자 목록 업데이트 시 Room 캐시 삭제
