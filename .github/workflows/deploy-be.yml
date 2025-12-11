@@ -112,7 +112,7 @@ jobs:
 
           # OOM 해결을 위한 JVM 옵션 설정 (1.5GB)
           JAVA_OPTS: "-Xms1024m -Xmx1536m -XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/java_heap.hprof"
-          
+
         run: |
           echo "$SSH_KEY" > key.pem
           chmod 600 key.pem
@@ -145,15 +145,26 @@ jobs:
               echo '10.0.101.249  chat-mongodb-03' | sudo tee -a /etc/hosts
             fi && \
           
-            # systemd 서비스 파일에 JAVA_OPTS 주입 및 적용 (OOM 해결)
-            echo '>>> [Auto-Config] JVM 메모리 옵션 변경...'
-            # Environment=JAVA_OPTS 주입: systemd가 이 변수를 읽음
-            if ! grep -q 'JAVA_OPTS' /etc/systemd/system/ktb-chat.service; then
-              sudo sed -i '/ExecStart/i Environment=JAVA_OPTS=\"\$JAVA_OPTS\"' /etc/systemd/system/ktb-chat.service
-            fi && \
-          
-            # ExecStart 줄이 JAVA_OPTS를 사용하도록 변경 (ExecStart=... -> ExecStart=/usr/bin/java $JAVA_OPTS ...)
-            sudo sed -i 's/^ExecStart=\/usr\/bin\/java \-jar.*/ExecStart=\/usr\/bin\/java \$JAVA_OPTS \-jar \/home\/ubuntu\/ktb-chat-backend\/app.jar/' /etc/systemd/system/ktb-chat.service && \
+            # 4. systemd 서비스 파일 재작성 (JVM 옵션 클린 적용)
+            echo '>>> [Auto-Config] systemd 서비스 파일 재작성 (JAVA_OPTS 적용)...'
+            cat << EOF_SERVICE | sudo tee /etc/systemd/system/ktb-chat.service
+            [Unit]
+            Description=KTB Chat Backend
+            After=network.target
+            
+            [Service]
+            User=ubuntu
+            WorkingDirectory=/home/ubuntu/ktb-chat-backend
+            EnvironmentFile=/home/ubuntu/ktb-chat-backend/.env
+            Environment=JAVA_OPTS=\"\$JAVA_OPTS\"
+            ExecStart=/usr/bin/java \$JAVA_OPTS -jar /home/ubuntu/ktb-chat-backend/app.jar
+            SuccessExitStatus=143
+            Restart=always
+            RestartSec=10
+            
+            [Install]
+            WantedBy=multi-user.target
+            EOF_SERVICE
           
             # 데몬 리로드 (변경 사항 적용을 위해 필수)
             echo '>>> [Auto-Config] systemd 데몬 리로드...'
