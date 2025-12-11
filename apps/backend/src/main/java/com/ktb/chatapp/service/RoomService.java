@@ -246,32 +246,55 @@ public class RoomService {
     }
 
     public RoomResponse joinRoom(String roomId, String password, String name) {
-        // Room: participantIds 없이 조회
-        Optional<Room> roomWithoutParticipantsOpt = roomRepository.findWithoutParticipantIds(roomId);
-        if (roomWithoutParticipantsOpt.isEmpty()) {
-            return null;
-        }
 
-        Room roomWithoutParticipants = roomWithoutParticipantsOpt.get();
-
+        // 1. 현재 사용자 조회
         User user = userRepository.findByEmail(name)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + name));
 
-        // 참여자 ID만 다시 조회
-        Set<String> participantIds = roomRepository.findParticipantIdsOnly(roomId)
-                .map(Room::getParticipantIds)
-                .orElse(Set.of());
+        // 2. Aggregation 으로 room + creator + participants 한 번에 로딩
+        RoomWithUsers roomAgg = roomRepository.findRoomWithUsersById(roomId);
+        if (roomAgg == null) {
+            return null;
+        }
 
-        if (roomWithoutParticipants.isHasPassword()) {
-            if (password == null || !passwordEncoder.matches(password, roomWithoutParticipants.getPassword())) {
+        // 3. 비밀번호 검증
+        if (roomAgg.isHasPassword()) {
+            if (password == null || !passwordEncoder.matches(password, roomAgg.getPassword())) {
                 throw new RuntimeException("비밀번호가 일치하지 않습니다.");
             }
         }
 
+        // 4. 참가자 추가 (atomic $addToSet)
         //TODO : 021 : 참가자 추가를 전체 Room 문서를 읽고 저장하는 대신 Mongo $addToSet 업데이트로 처리하면 경합과 write volume 을 줄일 수 있다.
         roomRepository.addParticipant(roomId, user.getId());
 
-        RoomResponse roomResponse = buildSingleRoomResponse(roomWithoutParticipants, name, participantIds);
+        // 5. 응답용 참가자 리스트 구성
+        List<User> participantIds = roomAgg.getParticipants();
+
+        boolean alreadyInRoom = roomAgg.getParticipants().stream()
+                .anyMatch(p -> user.getId().equals(p.getId()));
+
+        if (!alreadyInRoom) {
+            participantIds.add(user);
+        }
+
+        // 6. creatorUser 사용
+        User creator = roomAgg.getCreatorUser();
+
+        boolean isCreator = creator != null && creator.getId().equals(user.getId());
+
+        // 7. 최근 메시지 수 조회 (필요하면 aggregation으로 합칠 수도 있음)
+        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(roomAgg.getId(), tenMinutesAgo);
+
+        // 8. Room 엔티티로
+        Room roomForResponse = new Room();
+        roomForResponse.setId(roomAgg.getId());
+        roomForResponse.setName(roomAgg.getName());
+        roomForResponse.setCreator(roomAgg.getCreator());
+        roomForResponse.setHasPassword(roomAgg.isHasPassword());
+        roomForResponse.setCreatedAt(roomAgg.getCreatedAt());
+
+        RoomResponse roomResponse = mapToRoomResponse(roomForResponse, creator, participantIds, recentMessageCount, isCreator);
 
         try {
             eventPublisher.publishEvent(new RoomUpdatedEvent(this, roomId, roomResponse));
@@ -314,32 +337,17 @@ public class RoomService {
     }
 
     private RoomResponse buildSingleRoomResponse(Room room, String name) {
-        return buildRoomResponseInternal(room, name, null);
-    }
 
-    private RoomResponse buildSingleRoomResponse(Room room, String name, Set<String> participantIds) {
-        return buildRoomResponseInternal(room, name, participantIds);
-    }
-
-    private RoomResponse buildRoomResponseInternal(Room room,
-                                                   String name,
-                                                   Collection<String> participantIdsOverride) {
-
-        // 1. creator 조회
+        // creator는 단일 find
         User creator = null;
         if (room.getCreator() != null) {
             creator = userRepository.findById(room.getCreator()).orElse(null);
         }
 
-        // 2. participantIds 결정
-        Collection<String> participantIds = participantIdsOverride != null
-                ? participantIdsOverride
-                : room.getParticipantIds();
+        // participants는 $in 배치 쿼리
+        List<User> participants = userRepository.findByIdIn(room.getParticipantIds());
 
-        // 3. participants 조회 (projection)
-        List<User> participants = userRepository.findSimpleUsersByIdIn(participantIds);
-
-        // 4. recentMessageCount 조회
+        // recentMessageCount는 단일 쿼리
         long recentMessageCount = messageRepository.countRecentMessagesByRoomId(room.getId(), tenMinutesAgo);
 
         boolean isCreator = creator != null && creator.getId().equals(name);
