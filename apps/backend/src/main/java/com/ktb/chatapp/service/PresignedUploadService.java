@@ -57,11 +57,15 @@ public class PresignedUploadService {
     }
 
     public PresignedUploadResponse createUploadRequest(PresignedUploadRequest request, String userId) {
+        return createUploadRequest(request, userId, null);
+    }
+
+    public PresignedUploadResponse createUploadRequest(PresignedUploadRequest request, String userId, String subDirectory) {
         FileUtil.validateFileMetadata(request.getFilename(), request.getMimetype(), request.getSize());
 
         String safeFileName = FileUtil.generateSafeFileName(request.getFilename());
         String normalizedOriginal = FileUtil.normalizeOriginalFilename(request.getFilename());
-        String key = buildObjectKey(safeFileName);
+        String key = buildObjectKey(safeFileName, subDirectory);
         LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(expirationSeconds);
 
         PresignedUpload upload = PresignedUpload.builder()
@@ -185,10 +189,24 @@ public class PresignedUploadService {
     }
 
     private String buildObjectKey(String safeFileName) {
-        if (!StringUtils.hasText(baseDirectory)) {
+        return buildObjectKey(safeFileName, null);
+    }
+
+    private String buildObjectKey(String safeFileName, String subDirectory) {
+        String directory = baseDirectory;
+        if (StringUtils.hasText(subDirectory)) {
+            String sanitizedSub = sanitizeDirectory(subDirectory);
+            if (StringUtils.hasText(directory)) {
+                directory = directory + "/" + sanitizedSub;
+            } else {
+                directory = sanitizedSub;
+            }
+        }
+
+        if (!StringUtils.hasText(directory)) {
             return safeFileName;
         }
-        return baseDirectory + "/" + safeFileName;
+        return directory + "/" + safeFileName;
     }
 
     private String sanitizeDirectory(String directory) {
