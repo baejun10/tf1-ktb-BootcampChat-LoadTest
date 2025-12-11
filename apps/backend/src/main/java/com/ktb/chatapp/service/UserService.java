@@ -6,20 +6,15 @@ import com.ktb.chatapp.dto.UserResponse;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.util.FileUtil;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -33,9 +28,6 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final FileService fileService;
-
-    @Value("${app.upload.dir:uploads}")
-    private String uploadDir;
 
     @Value("${app.profile.image.max-size:5242880}") // 5MB
     private long maxProfileImageSize;
@@ -153,17 +145,8 @@ public class UserService {
      */
     private void deleteOldProfileImage(String profileImageUrl) {
         try {
-            if (profileImageUrl != null && profileImageUrl.startsWith("/uploads/")) {
-                // URL에서 파일명 추출
-                String filename = profileImageUrl.substring("/uploads/".length());
-                Path filePath = Paths.get(uploadDir, filename);
-
-                if (Files.exists(filePath)) {
-                    Files.delete(filePath);
-                    log.info("기존 프로필 이미지 삭제 완료: {}", filename);
-                }
-            }
-        } catch (IOException e) {
+            fileService.deleteStoredFileByUrl(profileImageUrl);
+        } catch (Exception e) {
             log.warn("기존 프로필 이미지 삭제 실패: {}", e.getMessage());
         }
     }

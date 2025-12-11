@@ -1,5 +1,7 @@
 package com.ktb.chatapp.controller;
 
+import com.ktb.chatapp.dto.PresignedUploadRequest;
+import com.ktb.chatapp.dto.PresignedUploadResponse;
 import com.ktb.chatapp.dto.StandardResponse;
 import com.ktb.chatapp.model.File;
 import com.ktb.chatapp.model.User;
@@ -7,6 +9,7 @@ import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.FileService;
 import com.ktb.chatapp.service.FileUploadResult;
+import com.ktb.chatapp.service.PresignedUploadService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -27,7 +30,15 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -44,6 +55,21 @@ public class FileController {
     private final FileService fileService;
     private final FileRepository fileRepository;
     private final UserRepository userRepository;
+    private final PresignedUploadService presignedUploadService;
+
+    @PostMapping("/presign")
+    public ResponseEntity<?> createPresignedUpload(@RequestBody PresignedUploadRequest request, Principal principal) {
+        try {
+            User user = userRepository.findByEmail(principal.getName())
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found: " + principal.getName()));
+
+            PresignedUploadResponse response = presignedUploadService.createUploadRequest(request, user.getId());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Presigned URL 생성 중 에러 발생", e);
+            return handleFileError(e);
+        }
+    }
 
     /**
      * 파일 업로드
@@ -62,36 +88,30 @@ public class FileController {
     })
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(
-            @Parameter(description = "업로드할 파일") @RequestParam("file") MultipartFile file,
+            @Parameter(description = "업로드할 파일") @RequestParam(value = "file", required = false) MultipartFile file,
+            @RequestParam(value = "uploadId", required = false) String uploadId,
             Principal principal) {
         try {
             User user = userRepository.findByEmail(principal.getName())
                     .orElseThrow(() -> new UsernameNotFoundException("User not found: " + principal.getName()));
 
-            FileUploadResult result = fileService.uploadFile(file, user.getId());
+            if (file == null && !StringUtils.hasText(uploadId)) {
+                throw new RuntimeException("업로드할 파일 또는 업로드 ID가 필요합니다.");
+            }
 
-            if (result.isSuccess()) {
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", true);
-                response.put("message", "파일 업로드 성공");
-                
-                Map<String, Object> fileData = new HashMap<>();
-                fileData.put("_id", result.getFile().getId());
-                fileData.put("filename", result.getFile().getFilename());
-                fileData.put("originalname", result.getFile().getOriginalname());
-                fileData.put("mimetype", result.getFile().getMimetype());
-                fileData.put("size", result.getFile().getSize());
-                fileData.put("uploadDate", result.getFile().getUploadDate());
-                
-                response.put("file", fileData);
-
-                return ResponseEntity.ok(response);
-            } else {
+            if (file != null) {
+                FileUploadResult result = fileService.uploadFile(file, user.getId());
+                if (result.isSuccess()) {
+                    return ResponseEntity.ok(buildFileResponse(result.getFile()));
+                }
                 Map<String, Object> errorResponse = new HashMap<>();
                 errorResponse.put("success", false);
                 errorResponse.put("message", "파일 업로드에 실패했습니다.");
                 return ResponseEntity.status(500).body(errorResponse);
             }
+
+            File savedFile = presignedUploadService.finalizeUpload(uploadId, user.getId());
+            return ResponseEntity.ok(buildFileResponse(savedFile));
 
         } catch (Exception e) {
             log.error("파일 업로드 중 에러 발생", e);
@@ -143,8 +163,12 @@ public class FileController {
 
             long contentLength = fileEntity != null ? fileEntity.getSize() : resource.contentLength();
 
+            MediaType contentType = fileEntity != null && StringUtils.hasText(fileEntity.getMimetype())
+                    ? MediaType.parseMediaType(fileEntity.getMimetype())
+                    : MediaType.APPLICATION_OCTET_STREAM;
+
             return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(fileEntity.getMimetype()))
+                    .contentType(contentType)
                     .contentLength(contentLength)
                     .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
                     .header(HttpHeaders.CACHE_CONTROL, "private, no-cache, no-store, must-revalidate")
@@ -189,6 +213,23 @@ public class FileController {
         errorResponse.put("message", responseMessage);
 
         return ResponseEntity.status(statusCode).body(errorResponse);
+    }
+
+    private Map<String, Object> buildFileResponse(File file) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "파일 업로드 성공");
+
+        Map<String, Object> fileData = new HashMap<>();
+        fileData.put("_id", file.getId());
+        fileData.put("filename", file.getFilename());
+        fileData.put("originalname", file.getOriginalname());
+        fileData.put("mimetype", file.getMimetype());
+        fileData.put("size", file.getSize());
+        fileData.put("uploadDate", file.getUploadDate());
+
+        response.put("file", fileData);
+        return response;
     }
 
     @GetMapping("/view/{filename:.+}")

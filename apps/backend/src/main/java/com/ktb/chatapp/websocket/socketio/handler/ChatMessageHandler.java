@@ -141,6 +141,7 @@ public class ChatMessageHandler {
             log.debug("Message received - type: {}, room: {}, userId: {}, hasFileData: {}",
                 data.getMessageType(), roomId, socketUser.id(), data.hasFileData());
 
+            //TODO 32 (MEDIUM): 금칙어 검증이 매 메시지마다 전체 단어 리스트를 순회하므로 Trie/Automation 캐시를 두거나 최근 검증 결과를 재사용해 CPU 사용량을 줄여야 한다.
             if (bannedWordChecker.containsBannedWord(messageContent.getTrimmedContent())) {
                 recordError("banned_word");
                 client.sendEvent(ERROR, Map.of(

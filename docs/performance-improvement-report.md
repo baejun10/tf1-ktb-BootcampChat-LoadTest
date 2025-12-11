@@ -2,7 +2,7 @@
 
 ## 1. 개요
 
-부하 테스트 환경에서 Socket.IO 기반 채팅 서버는 JSON 페이로드를 중심으로 동작하며, 세션 검증·레이트 리밋·금칙어 검사·AI 멘션 처리까지 단일 워커에서 순차 실행된다. 이 문서는 `ChatMessageHandler`, `LocalFileService`, `RateLimitService`, `RoomService`, `WebMvcConfig`를 기반으로 파악한 성능 병목과 개선 방향을 정리한다.
+부하 테스트 환경에서 Socket.IO 기반 채팅 서버는 JSON 페이로드를 중심으로 동작하며, 세션 검증·레이트 리밋·금칙어 검사·AI 멘션 처리까지 단일 워커에서 순차 실행된다. 이 문서는 `ChatMessageHandler`, `S3FileService`(또는 `LocalFileService`), `RateLimitService`, `RoomService`, `WebMvcConfig`를 기반으로 파악한 성능 병목과 개선 방향을 정리한다.
 
 ## 2. 실시간 메시지 파이프라인
 
@@ -52,7 +52,7 @@
 ## 5. 파일 서비스 및 정적 리소스
 
 ### 5.1 다운로드 권한 조회 축소
-- `LocalFileService.loadFileAsResource`는 `File → Message → Room`을 순차 조회한다.
+- `S3FileService.loadFileAsResource`(또는 `LocalFileService`)는 `File → Message → Room`을 순차 조회한다.
 - 파일 문서에 `roomId`/`participantSnapshot`을 저장하거나 Mongo aggregation으로 조인을 수행해 다운로드당 1회 조회로 줄인다.
 
 ### 5.2 파일 삭제 권한 확장

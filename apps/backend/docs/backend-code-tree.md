@@ -40,7 +40,7 @@ apps/backend
 |   L-- test/ (미사용, 기본 구조)
 |
 |-- target/ ................. Maven 빌드 산출물
-L-- uploads/ ................ LocalFileService 기본 저장소 (gitignore 대상)
+L-- uploads/ ................ 로컬 개발 시 사용 가능한 임시 저장소(기본은 S3)
 ```
 
 ---
@@ -68,10 +68,10 @@ L-- uploads/ ................ LocalFileService 기본 저장소 (gitignore 대�
 - `dto/RoomsResponse.java`, `dto/RoomResponse.java`, `dto/Page*`, `dto/Message*` — 방·메시지 REST/Socket 공통 데이터 포맷.
 
 ### 2.4 파일 & 업로드
-- `controller/FileController.java` — 업로드/다운로드/뷰/삭제 API, 인증 사용자 검증.
-- `service/FileService.java` + `service/LocalFileService.java` — 파일 보안 검증, 안전 파일명 생성, 경로 탈출 방지, 메시지/방 권한 체크.
+- `controller/FileController.java` — 업로드/다운로드/뷰/삭제 API, Presigned URL 발급, 인증 사용자 검증.
+- `service/FileService.java` + `service/S3FileService.java`/`service/LocalFileService.java` — storage.provider=s3일 땐 S3, local일 땐 로컬 디스크를 사용해 파일을 저장/삭제한다.
 - `repository/FileRepository.java`, `model/File.java`, `dto/FileResponse.java`, `service/FileUploadResult.java` — 파일 메타데이터 저장 및 응답 모델.
-- `uploads/` — 실제 파일 저장소 (프로필/채팅 파일).
+- `service/PresignedUploadService.java`, `model/PresignedUpload*.java`, `repository/PresignedUploadRepository.java` — Presigned 업로드 세션 관리 및 완료 처리.
 
 ### 2.5 레이트 리밋 & 보안 부가 기능
 - `service/RateLimitService.java`, `service/ratelimit/*`, `model/RateLimit.java`, `repository/RateLimitRepository.java` — Mongo 기반 요청 빈도 제어, 멀티 호스트 환경 대비.
