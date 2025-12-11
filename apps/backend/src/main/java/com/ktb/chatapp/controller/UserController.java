@@ -2,8 +2,14 @@ package com.ktb.chatapp.controller;
 
 import com.ktb.chatapp.dto.StandardResponse;
 import com.ktb.chatapp.dto.ProfileImageResponse;
+import com.ktb.chatapp.dto.PresignedUploadRequest;
+import com.ktb.chatapp.dto.PresignedUploadResponse;
+import com.ktb.chatapp.dto.FinalizeUploadRequest;
 import com.ktb.chatapp.dto.UpdateProfileRequest;
 import com.ktb.chatapp.dto.UserResponse;
+import com.ktb.chatapp.model.User;
+import com.ktb.chatapp.repository.UserRepository;
+import com.ktb.chatapp.service.PresignedUploadService;
 import com.ktb.chatapp.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -41,6 +47,8 @@ import java.security.Principal;
 public class UserController {
 
     private final UserService userService;
+    private final UserRepository userRepository;
+    private final PresignedUploadService presignedUploadService;
 
     /**
      * 현재 사용자 프로필 조회
@@ -104,24 +112,74 @@ public class UserController {
         }
     }
 
-    /**
-     * 프로필 이미지 업로드
-     */
-    @Operation(summary = "프로필 이미지 업로드", description = "프로필 이미지를 업로드합니다. 최대 5MB까지 가능합니다.")
+    @Operation(summary = "프로필 이미지 Presigned URL 생성", description = "프로필 이미지 업로드를 위한 Presigned URL을 생성합니다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Presigned URL 생성 성공",
+            content = @Content(schema = @Schema(implementation = PresignedUploadResponse.class))),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청",
+            content = @Content(schema = @Schema(implementation = StandardResponse.class))),
+        @ApiResponse(responseCode = "401", description = "인증 실패",
+            content = @Content(schema = @Schema(implementation = StandardResponse.class)))
+    })
+    @PostMapping("/profile-image/presign")
+    public ResponseEntity<?> createProfileImagePresignedUrl(
+            Principal principal,
+            @RequestBody PresignedUploadRequest request) {
+        try {
+            User user = userRepository.findByEmail(principal.getName())
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found: " + principal.getName()));
+
+            PresignedUploadResponse response = presignedUploadService.createUploadRequest(request, user.getId(), "profiles");
+            return ResponseEntity.ok(response);
+        } catch (UsernameNotFoundException e) {
+            log.error("프로필 이미지 Presigned URL 생성 실패 - 사용자 없음: {}", e.getMessage());
+            return ResponseEntity.status(404).body(StandardResponse.error("사용자를 찾을 수 없습니다."));
+        } catch (IllegalArgumentException e) {
+            log.error("프로필 이미지 Presigned URL 생성 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(StandardResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("프로필 이미지 Presigned URL 생성 중 오류 발생: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(StandardResponse.error("Presigned URL 생성 중 오류가 발생했습니다."));
+        }
+    }
+
+    @Operation(summary = "프로필 이미지 업로드 완료", description = "Presigned URL을 통해 업로드된 프로필 이미지를 완료 처리합니다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "이미지 업로드 완료 성공",
+            content = @Content(schema = @Schema(implementation = ProfileImageResponse.class))),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청",
+            content = @Content(schema = @Schema(implementation = StandardResponse.class))),
+        @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음",
+            content = @Content(schema = @Schema(implementation = StandardResponse.class)))
+    })
+    @PostMapping("/profile-image/finalize")
+    public ResponseEntity<?> finalizeProfileImageUpload(
+            Principal principal,
+            @RequestBody FinalizeUploadRequest request) {
+        try {
+            ProfileImageResponse response = userService.finalizeProfileImageUpload(principal.getName(), request.getUploadId());
+            return ResponseEntity.ok(response);
+        } catch (UsernameNotFoundException e) {
+            log.error("프로필 이미지 완료 처리 실패 - 사용자 없음: {}", e.getMessage());
+            return ResponseEntity.status(404).body(StandardResponse.error("사용자를 찾을 수 없습니다."));
+        } catch (IllegalArgumentException e) {
+            log.error("프로필 이미지 완료 처리 실패 - 잘못된 입력: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(StandardResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("프로필 이미지 완료 처리 중 오류 발생: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(StandardResponse.error("이미지 업로드 완료 처리 중 오류가 발생했습니다."));
+        }
+    }
+
+    @Operation(summary = "프로필 이미지 업로드 (레거시)", description = "MultipartFile을 통한 프로필 이미지 업로드 (이전 버전 호환)")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "이미지 업로드 성공",
             content = @Content(schema = @Schema(implementation = ProfileImageResponse.class))),
         @ApiResponse(responseCode = "400", description = "잘못된 파일 형식",
-            content = @Content(schema = @Schema(implementation = StandardResponse.class),
-                examples = @ExampleObject(value = "{\"success\":false,\"message\":\"지원하지 않는 파일 형식입니다.\"}"))),
+            content = @Content(schema = @Schema(implementation = StandardResponse.class))),
         @ApiResponse(responseCode = "401", description = "인증 실패",
             content = @Content(schema = @Schema(implementation = StandardResponse.class))),
         @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음",
-            content = @Content(schema = @Schema(implementation = StandardResponse.class))),
-        @ApiResponse(responseCode = "413", description = "파일 크기 초과",
-            content = @Content(schema = @Schema(implementation = StandardResponse.class),
-                examples = @ExampleObject(value = "{\"success\":false,\"code\":\"FILE_TOO_LARGE\",\"message\":\"파일 크기는 5MB를 초과할 수 없습니다.\"}"))),
-        @ApiResponse(responseCode = "500", description = "서버 내부 오류",
             content = @Content(schema = @Schema(implementation = StandardResponse.class)))
     })
     @PostMapping("/profile-image")

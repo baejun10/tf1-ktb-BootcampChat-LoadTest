@@ -31,12 +31,10 @@ const ProfileImageUpload = ({ currentImage, onImageChange }) => {
     if (!file) return;
 
     try {
-      // 이미지 파일 검증
       if (!file.type.startsWith('image/')) {
         throw new Error('이미지 파일만 업로드할 수 있습니다.');
       }
 
-      // 파일 크기 제한 (5MB)
       if (file.size > 5 * 1024 * 1024) {
         throw new Error('파일 크기는 5MB를 초과할 수 없습니다.');
       }
@@ -44,57 +42,74 @@ const ProfileImageUpload = ({ currentImage, onImageChange }) => {
       setUploading(true);
       setError('');
 
-      // 파일 미리보기 생성
       const objectUrl = URL.createObjectURL(file);
       setPreviewUrl(objectUrl);
 
-      // 인증 정보 확인
       if (!user?.token) {
         throw new Error('인증 정보가 없습니다.');
       }
 
-      // FormData 생성
-      const formData = new FormData();
-      formData.append('profileImage', file);
-
-      // 파일 업로드 요청
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile-image`, {
+      const presignResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile-image/presign`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'x-auth-token': user?.token,
           'x-session-id': user?.sessionId
         },
-        body: formData
+        body: JSON.stringify({
+          filename: file.name,
+          mimetype: file.type,
+          size: file.size
+        })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || '이미지 업로드에 실패했습니다.');
+      if (!presignResponse.ok) {
+        const errorData = await presignResponse.json();
+        throw new Error(errorData.message || 'Presigned URL 생성에 실패했습니다.');
       }
 
-      const data = await response.json();
-      
-      // 로컬 스토리지의 사용자 정보 업데이트
+      const { uploadUrl, headers, uploadId } = await presignResponse.json();
+
+      await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: headers,
+        body: file
+      });
+
+      const finalizeResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile-image/finalize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': user?.token,
+          'x-session-id': user?.sessionId
+        },
+        body: JSON.stringify({ uploadId })
+      });
+
+      if (!finalizeResponse.ok) {
+        const errorData = await finalizeResponse.json();
+        throw new Error(errorData.message || '이미지 업로드 완료 처리에 실패했습니다.');
+      }
+
+      const data = await finalizeResponse.json();
+
       const updatedUser = {
         ...user,
         profileImage: data.imageUrl
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
 
-      // 부모 컴포넌트에 변경 알림
       onImageChange(data.imageUrl);
 
       Toast.success('프로필 이미지가 변경되었습니다.');
 
-      // 전역 이벤트 발생
       window.dispatchEvent(new Event('userProfileUpdate'));
 
     } catch (error) {
       console.error('Image upload error:', error);
       setError(error.message);
       setPreviewUrl(getProfileImageUrl(currentImage));
-      
-      // 기존 objectUrl 정리
+
       if (previewUrl && previewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrl);
       }
