@@ -30,7 +30,7 @@ async function registerAction(page, userData) {
   await page.getByTestId('register-submit-button').click();
   // 목적 페이지가 실패 일 경우도 고려해야함.
   //await page.waitForURL(`${BASE_URL}/login`);
-  await page.waitForTimeout(1000);
+  //await page.waitForTimeout(1000);
 }
 
 /**
