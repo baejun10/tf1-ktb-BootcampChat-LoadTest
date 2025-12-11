@@ -110,6 +110,7 @@ public class PresignedUploadService {
             throw new RuntimeException("이미 완료된 업로드입니다.");
         }
 
+        //TODO 33 (MEDIUM): finalizeUpload 는 모든 검증을 단일 스레드에서 순차 실행하므로 S3 headObject 와 Mongo 저장을 비동기/파이프라인으로 나누면 업로드 완료 처리 TPS 를 끌어올릴 수 있다.
         HeadObjectRequest headRequest = HeadObjectRequest.builder()
                 .bucket(bucketName)
                 .key(upload.getPath())
@@ -129,6 +130,7 @@ public class PresignedUploadService {
         upload.setStatus(PresignedUploadStatus.UPLOADED);
 
         long step3 = System.currentTimeMillis();
+        //TODO 34 (HIGH): presignedUpload 상태를 PENDING→UPLOADED→COMPLETED 로 세 번 저장하고 동일 문서를 다시 읽으므로, Mongo 트랜잭션/단일 update 로 줄이지 않으면 고부하 시 write lock 으로 병목이 발생한다.
         presignedUploadRepository.save(upload);
         log.info("MongoDB save(UPLOADED) elapsed: {}ms", System.currentTimeMillis() - step3);
 
@@ -173,12 +175,24 @@ public class PresignedUploadService {
 
     private Map<String, String> flattenHeaders(Map<String, List<String>> signedHeaders, String mimetype) {
         Map<String, String> headers = new HashMap<>();
-        signedHeaders.forEach((key, values) -> {
+        boolean hasContentType = false;
+
+        for (Map.Entry<String, List<String>> entry : signedHeaders.entrySet()) {
+            String key = entry.getKey();
+            List<String> values = entry.getValue();
+
             if (!values.isEmpty() && !key.equalsIgnoreCase("host")) {
                 headers.put(key, values.get(0));
+                if (key.equalsIgnoreCase("content-type")) {
+                    hasContentType = true;
+                }
             }
-        });
-        headers.putIfAbsent("Content-Type", mimetype);
+        }
+
+        if (!hasContentType) {
+            headers.put("Content-Type", mimetype);
+        }
+
         return headers;
     }
 
