@@ -59,14 +59,22 @@ public class FileController {
 
     @PostMapping("/presign")
     public ResponseEntity<?> createPresignedUpload(@RequestBody PresignedUploadRequest request, Principal principal) {
+        long startTime = System.currentTimeMillis();
         try {
+            log.info("Presign request started - filename: {}, size: {}", request.getFilename(), request.getSize());
+
             User user = userRepository.findByEmail(principal.getName())
                     .orElseThrow(() -> new UsernameNotFoundException("User not found: " + principal.getName()));
 
             PresignedUploadResponse response = presignedUploadService.createUploadRequest(request, user.getId());
+
+            long elapsed = System.currentTimeMillis() - startTime;
+            log.info("Presign request completed - uploadId: {}, elapsed: {}ms", response.getUploadId(), elapsed);
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Presigned URL 생성 중 에러 발생", e);
+            long elapsed = System.currentTimeMillis() - startTime;
+            log.error("Presigned URL 생성 중 에러 발생 - elapsed: {}ms", elapsed, e);
             return handleFileError(e);
         }
     }
@@ -91,7 +99,10 @@ public class FileController {
             @Parameter(description = "업로드할 파일") @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "uploadId", required = false) String uploadId,
             Principal principal) {
+        long startTime = System.currentTimeMillis();
         try {
+            log.info("Upload request started - uploadId: {}, hasFile: {}", uploadId, file != null);
+
             User user = userRepository.findByEmail(principal.getName())
                     .orElseThrow(() -> new UsernameNotFoundException("User not found: " + principal.getName()));
 
@@ -102,6 +113,8 @@ public class FileController {
             if (file != null) {
                 FileUploadResult result = fileService.uploadFile(file, user.getId());
                 if (result.isSuccess()) {
+                    long elapsed = System.currentTimeMillis() - startTime;
+                    log.info("Multipart upload completed - fileId: {}, elapsed: {}ms", result.getFile().getId(), elapsed);
                     return ResponseEntity.ok(buildFileResponse(result.getFile()));
                 }
                 Map<String, Object> errorResponse = new HashMap<>();
@@ -111,10 +124,15 @@ public class FileController {
             }
 
             File savedFile = presignedUploadService.finalizeUpload(uploadId, user.getId());
+
+            long elapsed = System.currentTimeMillis() - startTime;
+            log.info("Presigned upload finalize completed - fileId: {}, elapsed: {}ms", savedFile.getId(), elapsed);
+
             return ResponseEntity.ok(buildFileResponse(savedFile));
 
         } catch (Exception e) {
-            log.error("파일 업로드 중 에러 발생", e);
+            long elapsed = System.currentTimeMillis() - startTime;
+            log.error("파일 업로드 중 에러 발생 - uploadId: {}, elapsed: {}ms", uploadId, elapsed, e);
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("message", "파일 업로드 중 오류가 발생했습니다.");
