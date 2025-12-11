@@ -3,7 +3,10 @@ package com.ktb.chatapp.service;
 import com.ktb.chatapp.dto.ProfileImageResponse;
 import com.ktb.chatapp.dto.UpdateProfileRequest;
 import com.ktb.chatapp.dto.UserResponse;
+import com.ktb.chatapp.model.File;
+import com.ktb.chatapp.model.PresignedUpload;
 import com.ktb.chatapp.model.User;
+import com.ktb.chatapp.repository.PresignedUploadRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.util.FileUtil;
 import java.time.LocalDateTime;
@@ -17,7 +20,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class UserService {
 
@@ -28,13 +30,28 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final FileService fileService;
+    private final PresignedUploadRepository presignedUploadRepository;
+    private final PresignedUploadService presignedUploadService;
 
-    @Value("${app.profile.image.max-size:5242880}") // 5MB
+    @Value("${app.profile.image.max-size:5242880}")
     private long maxProfileImageSize;
+
+    @Value("${storage.s3.public-base-url:}")
+    private String publicBaseUrl;
 
     private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList(
             "jpg", "jpeg", "png", "gif", "webp"
     );
+
+    public UserService(UserRepository userRepository,
+                       FileService fileService,
+                       PresignedUploadRepository presignedUploadRepository,
+                       PresignedUploadService presignedUploadService) {
+        this.userRepository = userRepository;
+        this.fileService = fileService;
+        this.presignedUploadRepository = presignedUploadRepository;
+        this.presignedUploadService = presignedUploadService;
+    }
 
     /**
      * 현재 사용자 프로필 조회
@@ -151,10 +168,38 @@ public class UserService {
         }
     }
 
-    /**
-     * 프로필 이미지 삭제
-     * @param email 사용자 이메일
-     */
+    public ProfileImageResponse finalizeProfileImageUpload(String email, String uploadId) {
+        User user = userRepository.findByEmail(email.toLowerCase())
+                .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
+
+        File file = presignedUploadService.finalizeUpload(uploadId, user.getId());
+
+        if (user.getProfileImage() != null && !user.getProfileImage().isEmpty()) {
+            deleteOldProfileImage(user.getProfileImage());
+        }
+
+        String profileImageUrl = buildPublicUrl(file.getPath());
+        user.setProfileImage(profileImageUrl);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        log.info("프로필 이미지 업로드 완료 (Presigned) - User ID: {}, File: {}", user.getId(), profileImageUrl);
+
+        return new ProfileImageResponse(
+                true,
+                "프로필 이미지가 업데이트되었습니다.",
+                profileImageUrl
+        );
+    }
+
+    private String buildPublicUrl(String s3Key) {
+        if (publicBaseUrl != null && !publicBaseUrl.isEmpty()) {
+            String normalizedKey = s3Key.startsWith("/") ? s3Key.substring(1) : s3Key;
+            return String.format("%s/%s", publicBaseUrl, normalizedKey);
+        }
+        return "/api/uploads/" + s3Key;
+    }
+
     public void deleteProfileImage(String email) {
         User user = userRepository.findByEmail(email.toLowerCase())
                 .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));

@@ -67,14 +67,14 @@ const FileMessage = ({
   const getDecodedFilename = (encodedFilename) => {
     try {
       if (!encodedFilename) return 'Unknown File';
-      
+
       const base64 = encodedFilename
         .replace(/-/g, '+')
         .replace(/_/g, '/');
-      
+
       const pad = base64.length % 4;
       const paddedBase64 = pad ? base64 + '='.repeat(4 - pad) : base64;
-      
+
       if (paddedBase64.match(/^[A-Za-z0-9+/=]+$/)) {
         return Buffer.from(paddedBase64, 'base64').toString('utf8');
       }
@@ -112,15 +112,27 @@ const FileMessage = ({
 
       const baseUrl = fileService.getFileUrl(msg.file.filename, false);
       const authenticatedUrl = `${baseUrl}?token=${encodeURIComponent(user?.token)}&sessionId=${encodeURIComponent(user?.sessionId)}&download=true`;
-      
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = authenticatedUrl;
-      document.body.appendChild(iframe);
 
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-      }, 5000);
+      const response = await fetch(authenticatedUrl);
+      if (!response.ok) {
+        throw new Error('파일 다운로드에 실패했습니다.');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      // Use the original name for download
+      const downloadFilename = getDecodedFilename(msg.file?.originalname || 'download');
+      link.setAttribute('download', downloadFilename);
+
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
     } catch (error) {
       console.error('File download error:', error);
