@@ -35,7 +35,7 @@ jobs:
           
           IPS=$(aws ec2 describe-instances \
             --filters "Name=tag:Name,Values=$TAG_NAME" "Name=instance-state-name,Values=running" \
-            --query "Reservations[*].Instances[*].PrivateIpAddress" \
+            --query "Reservations[*].Instances[*].PublicIpAddress" \
             --output text)
           
           if [ -z "$IPS" ]; then
