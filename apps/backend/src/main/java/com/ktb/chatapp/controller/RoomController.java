@@ -58,6 +58,7 @@ public class RoomController {
         try {
             HealthResponse healthResponse = roomService.getHealthStatus();
 
+            //TODO 30 (HIGH): 로드테스트 시 /health 가 초당 다수 호출되면 매번 Mongo 조회를 수행해 CPU/커넥션 풀이 고갈되므로, in-memory 캐시나 서킷 브레이커를 추가해 동일 값을 재사용하도록 한다.
             // 캐시 비활성화 헤더 설정
             return ResponseEntity
                 .status(healthResponse.isSuccess() ? 200 : 503)
@@ -112,6 +113,7 @@ public class RoomController {
             pageRequest.setSortOrder(sortOrder);
             pageRequest.setSearch(search);
 
+            //TODO 31 (HIGH): 방 목록은 동일 파라미터로 반복 요청되므로 Redis/커스텀 캐시를 붙여 최근 결과를 재사용하지 않으면 Mongo와 DTO 변환 부하가 그대로 프런트 트래픽만큼 발생한다.
             // 서비스에서 페이지네이션 처리
             RoomsResponse response = roomService.getAllRoomsWithPagination(pageRequest, principal.getName());
 
