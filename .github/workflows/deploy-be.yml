@@ -110,8 +110,6 @@ jobs:
           STORAGE_PROVIDER: s3
           CURRENT_IP: ${{ matrix.ip }}
 
-          # OOM 해결을 위한 JVM 옵션 설정 (1.5GB)
-          JAVA_OPTS: "-Xms1024m -Xmx1536m -XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/java_heap.hprof"
 
         run: |
           echo "$SSH_KEY" > key.pem
@@ -156,8 +154,7 @@ jobs:
           User=ubuntu
           WorkingDirectory=/home/ubuntu/ktb-chat-backend
           EnvironmentFile=/home/ubuntu/ktb-chat-backend/.env
-          Environment=JAVA_OPTS=\"\$JAVA_OPTS\"
-          ExecStart=/usr/bin/java \$JAVA_OPTS -jar /home/ubuntu/ktb-chat-backend/app.jar
+          ExecStart=/usr/bin/java -Xms1024m -Xmx1536m -XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/java_heap.hprof -jar /home/ubuntu/ktb-chat-backend/app.jar
           SuccessExitStatus=143
           Restart=always
           RestartSec=10
