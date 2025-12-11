@@ -513,6 +513,7 @@ function ChatRoomsComponent() {
           }
         };
 
+        //TODO 46 (HIGH): socket.on 으로 리스너를 등록한 뒤 cleanup 에서 off 하지 않아 페이지 이동/새로고침 시 동일 이벤트 핸들러가 누적된다. 반드시 반환 함수에서 socket.off(event, handler)를 호출하라.
         Object.entries(handlers).forEach(([event, handler]) => {
           socket.on(event, handler);
         });
@@ -521,7 +522,7 @@ function ChatRoomsComponent() {
         if (!isSubscribed) return;
 
         if (error.message?.includes('Authentication required') ||
-            error.message?.includes('Invalid session')) {
+          error.message?.includes('Invalid session')) {
           // Auth error will be handled by the useAuth context
         }
 
@@ -577,6 +578,22 @@ function ChatRoomsComponent() {
       setJoiningRoom(false);
     }
   };
+
+  // 쿼리 파라미터로 전달된 room ID가 있으면 자동으로 입장 시도
+  const hasAutoJoinedRef = useRef(false);
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const { room: roomId } = router.query;
+
+    if (roomId &&
+      connectionStatus === CONNECTION_STATUS.CONNECTED &&
+      !hasAutoJoinedRef.current) {
+
+      hasAutoJoinedRef.current = true;
+      handleJoinRoom(roomId);
+    }
+  }, [router.isReady, router.query, connectionStatus, handleJoinRoom]);
 
   const renderRoomsTable = () => {
     if (!rooms || rooms.length === 0) return null;
@@ -710,7 +727,7 @@ function ChatRoomsComponent() {
           </HStack>
         </VStack>
 
-        
+
         {error && (
           <Callout
             color={error.type === 'danger' ? 'danger' : error.type === 'warning' ? 'warning' : 'primary'}

@@ -5,7 +5,6 @@ import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
-import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.util.FileUtil;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
@@ -36,16 +35,16 @@ public class LocalFileService implements FileService {
     private final Path fileStorageLocation;
     private final FileRepository fileRepository;
     private final MessageRepository messageRepository;
-    private final RoomRepository roomRepository;
+    private final RoomCacheService roomCacheService;
 
     public LocalFileService(@Value("${file.upload-dir:uploads}") String uploadDir,
                             FileRepository fileRepository,
                             MessageRepository messageRepository,
-                            RoomRepository roomRepository) {
+                            RoomCacheService roomCacheService) {
         this.fileRepository = fileRepository;
         this.messageRepository = messageRepository;
-        this.roomRepository = roomRepository;
         this.fileStorageLocation = Paths.get(uploadDir).toAbsolutePath().normalize();
+        this.roomCacheService = roomCacheService;
     }
 
     @PostConstruct
@@ -121,13 +120,14 @@ public class LocalFileService implements FileService {
     @Override
     public Resource loadFileAsResource(String fileName, String requesterId) {
         try {
+            //TODO 38 (HIGH): 파일 다운로드마다 file→message→room을 차례로 조회해 Mongo round-trip이 세 번 발생한다. Aggregation lookup이나 캐시를 사용해 단일 쿼리로 권한 검증과 메타데이터 조회를 끝내야 부하 테스트에서 I/O 병목을 피할 수 있다.
             File fileEntity = fileRepository.findByFilename(fileName)
                     .orElseThrow(() -> new RuntimeException("파일을 찾을 수 없습니다: " + fileName));
 
             Message message = messageRepository.findByFileId(fileEntity.getId())
                     .orElseThrow(() -> new RuntimeException("파일과 연결된 메시지를 찾을 수 없습니다"));
 
-            Room room = roomRepository.findById(message.getRoomId())
+            Room room = roomCacheService.findRoomById(message.getRoomId())
                     .orElseThrow(() -> new RuntimeException("방을 찾을 수 없습니다"));
 
             if (!room.getParticipantIds().contains(requesterId)) {
@@ -198,5 +198,4 @@ public class LocalFileService implements FileService {
         return StringUtils.cleanPath(originalFilename);
     }
 }
-
 

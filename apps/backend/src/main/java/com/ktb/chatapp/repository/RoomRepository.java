@@ -27,6 +27,7 @@ public interface RoomRepository extends MongoRepository<Room, String> {
     @Query(value = "{}", fields = "{ '_id': 1 }")
     Optional<Room> findOneForHealthCheck();
 
+    // MongoDB의 $addToSet 연산자를 사용한 원자적 업데이트
     @Query("{'_id': ?0}")
     @Update("{'$addToSet': {'participantIds': ?1}}")
     void addParticipant(String roomId, String userId);
