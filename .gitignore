@@ -53,3 +53,9 @@ yarn-error.log*
 # Misc
 .cache/
 *.tsbuildinfo
+
+.env.local
+.env.example
+.env.test
+.env.production
+.env.development

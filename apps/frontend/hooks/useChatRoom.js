@@ -247,7 +247,8 @@ export const useChatRoom = () => {
 
     // 메시지 이벤트
     socketRef.current.on('message', message => {
-      if (!message || !mountedRef.current || messageProcessingRef.current || !message._id) return;
+      // if (!message || !mountedRef.current || messageProcessingRef.current || !message._id) return;
+      if (!message || !mountedRef.current || !message._id) return;
       
       if (processedMessageIds.current.has(message._id)) {
         return;

@@ -79,6 +79,15 @@ const ChatMessages = ({
   const renderMessage = useCallback((msg, idx) => {
     if (!msg) return null;
 
+    // 추가코드
+    // 파일 메시지의 content가 없으면 파일명으로 대체
+    if (msg.type === 'file' && (!msg.content || msg.content.trim() === '')) {
+      msg = {
+        ...msg,
+        content: `파일: ${msg.file?.originalname || 'Unknown'}`
+      };
+    }
+
     const commonProps = {
       currentUser,
       room,
