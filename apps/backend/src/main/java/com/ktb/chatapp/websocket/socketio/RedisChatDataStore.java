@@ -58,10 +58,8 @@ public class RedisChatDataStore implements ChatDataStore {
     @Override
     public int size() {
         try {
-            Long count = redisTemplate.countExistingKeys(
-                redisTemplate.keys(KEY_PREFIX + "*")
-            );
-            return count != null ? count.intValue() : 0;
+            var keys = redisTemplate.keys(KEY_PREFIX + "*");
+            return keys != null ? keys.size() : 0;
         } catch (Exception e) {
             log.error("Failed to get size", e);
             return 0;
