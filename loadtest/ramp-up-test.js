@@ -150,12 +150,12 @@ const argv = yargs(hideBin(process.argv))
   .option('api-url', {
     description: 'Backend REST API URL',
     type: 'string',
-    default: 'http://localhost:5001'
+    default: 'https://api.chat.goorm-ktb-001.goorm.team'
   })
   .option('socket-url', {
     description: 'Socket.IO server URL',
     type: 'string',
-    default: 'http://localhost:5002'
+    default: 'https://api.chat.goorm-ktb-001.goorm.team'
   })
   .option('room-id', {
     description: 'Room ID to send messages to (auto-create if not specified)',

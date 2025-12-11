@@ -230,11 +230,8 @@ public class ChatMessageHandler {
         message.setMentions(messageContent.aiMentions());
         
         // 메타데이터는 Map<String, Object>
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("fileType", file.getMimetype());
-        metadata.put("fileSize", file.getSize());
-        metadata.put("originalName", file.getOriginalname());
-        message.setMetadata(metadata);
+        // 파일을 다시 조회하지 않도록 파일을 담는다.
+        message.setMetadata(Map.of("file", FileResponse.from(file)));
 
         return message;
     }
@@ -264,13 +261,23 @@ public class ChatMessageHandler {
         messageResponse.setTimestamp(message.toTimestampMillis());
         messageResponse.setReactions(message.getReactions() != null ? message.getReactions() : Collections.emptyMap());
         messageResponse.setSender(UserResponse.from(sender));
-        messageResponse.setMetadata(message.getMetadata());
+
+        // 메타데이터를 handleFileMessage 메서드에서 저장한 FileResponse에서 꺼내온다
+        FileResponse fileResponse = (FileResponse) message.getMetadata().get("file");
+        Map<String, Object> metadata = new HashMap<>();
+
+        // 파일 데이터인 경우만 존재
+        if (fileResponse != null) {
+            metadata.put("fileType", fileResponse.getMimetype());
+            metadata.put("fileSize", fileResponse.getSize());
+            metadata.put("originalName", fileResponse.getOriginalname());
+            messageResponse.setFile(fileResponse);
+        }
+
+        messageResponse.setMetadata(metadata);
 
         //TODO : 012 : 이미 handleFileMessage 단계에서 File 메타데이터를 알고 있으므로 메시지 응답 생성 시 다시 fileRepository 를 hit 하지 않도록 캐시/파이프라인을 바꾸면 파일 메시지 전송 성능이 향상된다.
-        if (message.getFileId() != null) {
-            fileRepository.findById(message.getFileId())
-                    .ifPresent(file -> messageResponse.setFile(FileResponse.from(file)));
-        }
+        // -> handleFileMessage 메서드에서 FileResponse를 직접 전달할 수 있도록 수정한다.
 
         return messageResponse;
     }

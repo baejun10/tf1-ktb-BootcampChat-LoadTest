@@ -36,12 +36,12 @@ const argv = yargs(hideBin(process.argv))
   .option('api-url', {
     description: 'Backend REST API URL',
     type: 'string',
-    default: 'http://localhost:5001'
+    default: 'https://api.chat.goorm-ktb-001.goorm.team'
   })
   .option('socket-url', {
     description: 'Socket.IO server URL',
     type: 'string',
-    default: 'http://localhost:5002'
+    default: 'https://api.chat.goorm-ktb-001.goorm.team'
   })
   .option('room-id', {
     description: 'Room ID to send messages to (auto-create if not specified)',
@@ -115,12 +115,19 @@ class LoadTester {
           { timeout: 5000 }
         );
       } catch (loginError) {
-        // If login fails, try to register
+        // If login fails, try to register then login again
         if (loginError.response?.status === 401 || loginError.response?.status === 404) {
           this.log('info', `Registering new user: ${email}`);
-          authRes = await axios.post(
+          await axios.post(
             `${this.config.apiUrl}/api/auth/register`,
             { email, password, name },
+            { timeout: 5000 }
+          );
+
+          // Attempt login again after registration
+          authRes = await axios.post(
+            `${this.config.apiUrl}/api/auth/login`,
+            { email, password },
             { timeout: 5000 }
           );
         } else {
