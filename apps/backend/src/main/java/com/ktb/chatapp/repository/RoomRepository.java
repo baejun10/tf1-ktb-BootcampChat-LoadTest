@@ -11,13 +11,19 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 @Repository
-public interface RoomRepository extends MongoRepository<Room, String> {
+public interface RoomRepository extends MongoRepository<Room, String>, RoomCustomRepository {
 
     // 페이지네이션과 함께 모든 방 조회
     Page<Room> findAll(Pageable pageable);
 
     // 검색어와 함께 페이지네이션 조회
     Page<Room> findByNameContainingIgnoreCase(String name, Pageable pageable);
+
+    @Query(value = "{ '_id':  ?0 }", fields = "{ 'participantIds': 0 }")
+    Optional<Room> findWithoutParticipantIds(String roomId);
+
+    @Query(value = "{ '_id':  ?0 }", fields = "{ 'participantIds': 1 }")
+    Optional<Room> findParticipantIdsOnly(String roomId);
 
     // 가장 최근에 생성된 방 조회 (Health Check용)
     @Query(value = "{}", sort = "{ 'createdAt': -1 }")

@@ -246,29 +246,55 @@ public class RoomService {
     }
 
     public RoomResponse joinRoom(String roomId, String password, String name) {
-        Optional<Room> roomOpt = roomRepository.findById(roomId);
-        if (roomOpt.isEmpty()) {
+
+        // 1. 현재 사용자 조회
+        User user = userRepository.findByEmail(name)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + name));
+
+        // 2. Aggregation 으로 room + creator + participants 한 번에 로딩
+        RoomWithUsers roomAgg = roomRepository.findRoomWithUsersById(roomId);
+        if (roomAgg == null) {
             return null;
         }
 
-        Room room = roomOpt.get();
-        User user = userRepository.findByEmail(name)
-            .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + name));
-
-        if (room.isHasPassword()) {
-            if (password == null || !passwordEncoder.matches(password, room.getPassword())) {
+        // 3. 비밀번호 검증
+        if (roomAgg.isHasPassword()) {
+            if (password == null || !passwordEncoder.matches(password, roomAgg.getPassword())) {
                 throw new RuntimeException("비밀번호가 일치하지 않습니다.");
             }
         }
 
-        if (!room.getParticipantIds().contains(user.getId())) {
-            //TODO : 021 : 참가자 추가를 전체 Room 문서를 읽고 저장하는 대신 Mongo $addToSet 업데이트로 처리하면 경합과 write volume 을 줄일 수 있다.
-            roomRepository.addParticipant(roomId, user.getId());
-            roomOpt = roomRepository.findById(roomId);
-            room = roomOpt.orElse(room);
+        // 4. 참가자 추가 (atomic $addToSet)
+        //TODO : 021 : 참가자 추가를 전체 Room 문서를 읽고 저장하는 대신 Mongo $addToSet 업데이트로 처리하면 경합과 write volume 을 줄일 수 있다.
+        roomRepository.addParticipant(roomId, user.getId());
+
+        // 5. 응답용 참가자 리스트 구성
+        List<User> participantIds = roomAgg.getParticipants();
+
+        boolean alreadyInRoom = roomAgg.getParticipants().stream()
+                .anyMatch(p -> user.getId().equals(p.getId()));
+
+        if (!alreadyInRoom) {
+            participantIds.add(user);
         }
 
-        RoomResponse roomResponse = buildSingleRoomResponse(room, name);
+        // 6. creatorUser 사용
+        User creator = roomAgg.getCreatorUser();
+
+        boolean isCreator = creator != null && creator.getId().equals(user.getId());
+
+        // 7. 최근 메시지 수 조회 (필요하면 aggregation으로 합칠 수도 있음)
+        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(roomAgg.getId(), tenMinutesAgo);
+
+        // 8. Room 엔티티로
+        Room roomForResponse = new Room();
+        roomForResponse.setId(roomAgg.getId());
+        roomForResponse.setName(roomAgg.getName());
+        roomForResponse.setCreator(roomAgg.getCreator());
+        roomForResponse.setHasPassword(roomAgg.isHasPassword());
+        roomForResponse.setCreatedAt(roomAgg.getCreatedAt());
+
+        RoomResponse roomResponse = mapToRoomResponse(roomForResponse, creator, participantIds, recentMessageCount, isCreator);
 
         try {
             eventPublisher.publishEvent(new RoomUpdatedEvent(this, roomId, roomResponse));
