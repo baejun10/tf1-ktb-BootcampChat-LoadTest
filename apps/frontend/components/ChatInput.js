@@ -112,6 +112,10 @@ const ChatInput = forwardRef(({
         setMessage('');
         setFiles([]);
 
+        // ✅ Textarea도 여기서 초기화
+        if (messageInputRef?.current) {
+          messageInputRef.current.value = '';
+        }
       } catch (error) {
         console.error('File submit error:', error);
         setUploadError(error.message);
@@ -122,8 +126,12 @@ const ChatInput = forwardRef(({
         content: message.trim()
       });
       setMessage('');
+      // ✅ Textarea도 여기서 초기화
+      if (messageInputRef?.current) {
+        messageInputRef.current.value = '';
+      }
     }
-  }, [files, message, onSubmit, setMessage]);
+  }, [files, message, onSubmit, setMessage, messageInputRef]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -293,6 +301,11 @@ const ChatInput = forwardRef(({
   }, [message, setMessage, setShowMentionList, messageInputRef]);
 
   const handleKeyDown = useCallback((e) => {
+    // ✅ IME composition 중에는 키 이벤트 무시 (한글, 일본어, 중국어 등)
+    if (e.nativeEvent.isComposing) {
+      return;
+    }
+
     if (showMentionList) {
       const participants = getFilteredParticipants(room); // room 객체 전달
       const participantsCount = participants.length;
@@ -300,14 +313,14 @@ const ChatInput = forwardRef(({
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
-          setMentionIndex(prev => 
+          setMentionIndex(prev =>
             prev < participantsCount - 1 ? prev + 1 : 0
           );
           break;
 
         case 'ArrowUp':
           e.preventDefault();
-          setMentionIndex(prev => 
+          setMentionIndex(prev =>
             prev > 0 ? prev - 1 : participantsCount - 1
           );
           break;

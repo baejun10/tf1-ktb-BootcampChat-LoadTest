@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Toast } from '../components/Toast';
 import fileService from '../services/fileService';
 
@@ -12,6 +12,7 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
  const [uploading, setUploading] = useState(false);
  const [uploadProgress, setUploadProgress] = useState(0);
  const [uploadError, setUploadError] = useState(null);
+ const isSubmittingRef = useRef(false);  // ✅ 이중 제출 방지
 
  const handleMessageChange = useCallback((e) => {
    const newValue = e.target.value;
@@ -65,6 +66,12 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
   }, [socketRef, router?.query?.room, loadingMessages, messages, setLoadingMessages]);
 
  const handleMessageSubmit = useCallback(async (messageData) => {
+   // ✅ 이중 제출 방지: 이미 제출 중이면 반환
+   if (isSubmittingRef.current) {
+     console.warn('Message submission already in progress, ignoring duplicate call');
+     return;
+   }
+
    if (!socketRef.current?.connected || !currentUser) {
      Toast.error('채팅 서버와 연결이 끊어졌습니다.');
      return;
@@ -77,6 +84,9 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
    }
 
    try {
+     // ✅ 제출 시작 표시
+     isSubmittingRef.current = true;
+
       if (messageData.type === 'file') {
         setUploading(true);
         setUploadError(null);
@@ -112,6 +122,7 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
        setUploadProgress(0);
 
      } else if (messageData.content?.trim()) {
+
        socketRef.current.emit('chatMessage', {
          room: roomId,
          type: 'text',
@@ -119,14 +130,15 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
        });
 
        setMessage('');
+
      }
 
      setShowEmojiPicker(false);
      setShowMentionList(false);
 
    } catch (error) {
-     if (error.message?.includes('세션') || 
-         error.message?.includes('인증') || 
+     if (error.message?.includes('세션') ||
+         error.message?.includes('인증') ||
          error.message?.includes('토큰')) {
        await handleSessionError();
        return;
@@ -137,6 +149,9 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
        setUploadError(error.message);
        setUploading(false);
      }
+   } finally {
+     // ✅ 제출 완료 표시 (에러 발생해도 반드시 실행)
+     isSubmittingRef.current = false;
    }
  }, [currentUser, router, handleSessionError, socketRef]);
 
