@@ -2,8 +2,11 @@ package com.ktb.chatapp.service;
 
 import com.ktb.chatapp.model.Session;
 import com.ktb.chatapp.service.session.SessionStore;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.convert.DurationStyle;
@@ -24,6 +27,8 @@ public class SessionService {
     private final SessionStore sessionStore;
     public static final long SESSION_TTL_SEC = DurationStyle.detectAndParse(SESSION_TTL).getSeconds();
     private static final long SESSION_TIMEOUT = SESSION_TTL_SEC * 1000;
+    private static final long SESSION_CACHE_TTL_MILLIS = Duration.ofSeconds(1).toMillis();
+    private final ConcurrentMap<String, CachedSession> sessionCache = new ConcurrentHashMap<>();
 
     private String generateSessionId() {
         return UUID.randomUUID().toString().replace("-", "");
@@ -81,7 +86,7 @@ public class SessionService {
             }
 
             //TODO 42 (HIGH): 모든 Socket 이벤트가 validateSession 을 호출하면서 sessionStore.findByUserId 로 Mongo round-trip을 발생시킨다. 세션 정보를 로컬 캐시에 보관하거나 request-context 에서 재사용해야 TPS 하락을 막을 수 있다.
-            Session session = sessionStore.findByUserId(userId).orElse(null);
+            Session session = findSessionWithCache(userId);
             
             if (session == null) {
                 log.warn("No session found for userId: {}", userId);
@@ -105,6 +110,7 @@ public class SessionService {
             session.setLastActivity(now);
             session.setExpiresAt(Instant.now().plusSeconds(SESSION_TTL_SEC));
             session = sessionStore.save(session);
+            cacheSession(session);
 
             SessionData sessionData = toSessionData(session);
             return SessionValidationResult.valid(sessionData);
@@ -122,7 +128,7 @@ public class SessionService {
                 return;
             }
 
-            Session session = sessionStore.findByUserId(userId).orElse(null);
+            Session session = findSessionWithCache(userId);
             if (session == null) {
                 log.debug("No session found to update last activity for user: {}", userId);
                 return;
@@ -130,7 +136,8 @@ public class SessionService {
 
             session.setLastActivity(Instant.now().toEpochMilli());
             session.setExpiresAt(Instant.now().plusSeconds(SESSION_TTL_SEC));
-            sessionStore.save(session);
+            Session updated = sessionStore.save(session);
+            cacheSession(updated);
             
         } catch (Exception e) {
             log.error("Failed to update session activity for user: {}", userId, e);
@@ -144,6 +151,7 @@ public class SessionService {
             } else {
                 sessionStore.deleteAll(userId);
             }
+            evictCachedSession(userId);
         } catch (Exception e) {
             log.error("Session removal error for userId: {}, sessionId: {}", userId, sessionId, e);
             throw new RuntimeException("세션 삭제 중 오류가 발생했습니다.", e);
@@ -153,6 +161,7 @@ public class SessionService {
     public void removeAllUserSessions(String userId) {
         try {
             sessionStore.deleteAll(userId);
+            evictCachedSession(userId);
         } catch (Exception e) {
             log.error("Remove all sessions error for userId: {}", userId, e);
             throw new RuntimeException("모든 세션 삭제 중 오류가 발생했습니다.", e);
@@ -165,7 +174,7 @@ public class SessionService {
 
     SessionData getActiveSession(String userId) {
         try {
-            Session session = sessionStore.findByUserId(userId).orElse(null);
+            Session session = findSessionWithCache(userId);
             
             if (session == null) {
                 return null;
@@ -177,5 +186,49 @@ public class SessionService {
             return null;
         }
     }
-    
+
+    private Session findSessionWithCache(String userId) {
+        long now = Instant.now().toEpochMilli();
+        CachedSession cachedSession = sessionCache.get(userId);
+        if (cachedSession != null && !cachedSession.isExpired(now)) {
+            return cachedSession.session;
+        }
+
+        Session session = sessionStore.findByUserId(userId).orElse(null);
+        if (session != null) {
+            sessionCache.put(userId, new CachedSession(session, now));
+        } else {
+            sessionCache.remove(userId);
+        }
+        return session;
+    }
+
+    private void cacheSession(Session session) {
+        if (session == null) {
+            return;
+        }
+        sessionCache.put(session.getUserId(), new CachedSession(session, Instant.now().toEpochMilli()));
+    }
+
+    private void evictCachedSession(String userId) {
+        if (userId == null) {
+            return;
+        }
+        sessionCache.remove(userId);
+    }
+
+    private static final class CachedSession {
+        private final Session session;
+        private final long cachedAt;
+
+        private CachedSession(Session session, long cachedAt) {
+            this.session = session;
+            this.cachedAt = cachedAt;
+        }
+
+        private boolean isExpired(long now) {
+            return now - cachedAt > SESSION_CACHE_TTL_MILLIS;
+        }
+    }
+
 }
