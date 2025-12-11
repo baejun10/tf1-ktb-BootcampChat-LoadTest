@@ -1,0 +1,57 @@
+package com.ktb.chatapp.config;
+
+import java.net.URI;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.util.StringUtils;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.S3Configuration.Builder;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+
+@Configuration
+public class S3Config {
+
+    @Bean
+    public S3Client s3Client(
+            @Value("${storage.s3.region}") String region,
+            @Value("${storage.s3.endpoint:}") String endpoint,
+            @Value("${storage.s3.path-style-enabled:false}") boolean pathStyleEnabled
+    ) {
+        S3Client.Builder builder = S3Client.builder()
+                .credentialsProvider(DefaultCredentialsProvider.create())
+                .region(Region.of(region));
+
+        if (StringUtils.hasText(endpoint)) {
+            builder.endpointOverride(URI.create(endpoint));
+        }
+
+        Builder serviceConfig = S3Configuration.builder()
+                .checksumValidationEnabled(false);
+        if (pathStyleEnabled) {
+            serviceConfig.pathStyleAccessEnabled(true);
+        }
+        builder.serviceConfiguration(serviceConfig.build());
+
+        return builder.build();
+    }
+
+    @Bean
+    public S3Presigner s3Presigner(
+            @Value("${storage.s3.region}") String region,
+            @Value("${storage.s3.endpoint:}") String endpoint
+    ) {
+        S3Presigner.Builder builder = S3Presigner.builder()
+                .region(Region.of(region))
+                .credentialsProvider(DefaultCredentialsProvider.create());
+
+        if (StringUtils.hasText(endpoint)) {
+            builder.endpointOverride(URI.create(endpoint));
+        }
+
+        return builder.build();
+    }
+}
