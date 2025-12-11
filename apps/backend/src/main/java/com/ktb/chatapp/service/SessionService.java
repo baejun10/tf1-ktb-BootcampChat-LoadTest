@@ -1,9 +1,7 @@
 package com.ktb.chatapp.service;
 
 import com.ktb.chatapp.model.Session;
-import com.ktb.chatapp.repository.redis.CacheRepository;
 import com.ktb.chatapp.service.session.SessionStore;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -18,18 +16,17 @@ import static com.ktb.chatapp.model.Session.SESSION_TTL;
 @RequiredArgsConstructor
 public class SessionService {
 
+    /**
+     * JWT에서 전달된 세션 정보를 검증·저장·폐기하는 중앙 세션 관리자.
+     * SessionStore 구현체(Mongo 등)에 의존해 단일 세션 정책과 TTL 연장을 수행한다.
+     */
+
     private final SessionStore sessionStore;
-    private final CacheRepository cacheRepository;
     public static final long SESSION_TTL_SEC = DurationStyle.detectAndParse(SESSION_TTL).getSeconds();
     private static final long SESSION_TIMEOUT = SESSION_TTL_SEC * 1000;
-    private static final String CACHE_KEY_PREFIX = "session:";
 
     private String generateSessionId() {
         return UUID.randomUUID().toString().replace("-", "");
-    }
-
-    private String getCacheKey(String userId) {
-        return CACHE_KEY_PREFIX + userId;
     }
 
     private SessionData toSessionData(Session session) {
@@ -44,9 +41,13 @@ public class SessionService {
 
     public SessionCreationResult createSession(String userId, SessionMetadata metadata) {
         try {
+            //TODO : 016 : 로그인 때마다 deleteAll 을 호출하면 사용자당 높은 write load 가 발생하므로 sessionId 를 비교해 조건부 삭제하거나 TTL index 를 활용해 자연 만료시키는 방식으로 줄일 수 있다.
+            // Remove all existing user sessions
+            removeAllUserSessions(userId);
+
             String sessionId = generateSessionId();
             long now = Instant.now().toEpochMilli();
-
+            
             Session session = Session.builder()
                     .userId(userId)
                     .sessionId(sessionId)
@@ -57,9 +58,8 @@ public class SessionService {
                     .build();
 
             session = sessionStore.save(session);
-
+            
             SessionData sessionData = toSessionData(session);
-            cacheRepository.save(getCacheKey(userId), sessionData, Duration.ofSeconds(SESSION_TTL_SEC));
 
             return SessionCreationResult.builder()
                     .sessionId(sessionId)
@@ -80,34 +80,33 @@ public class SessionService {
                 return SessionValidationResult.invalid("INVALID_PARAMETERS", "유효하지 않은 세션 파라미터");
             }
 
-            String cacheKey = getCacheKey(userId);
-            SessionData sessionData = cacheRepository.get(cacheKey, SessionData.class);
-
-            if (sessionData == null) {
-                Session session = sessionStore.findByUserId(userId).orElse(null);
-                if (session != null) {
-                    sessionData = toSessionData(session);
-                    cacheRepository.save(cacheKey, sessionData, Duration.ofSeconds(SESSION_TTL_SEC));
-                }
-            }
-
-            if (sessionData == null) {
+            //TODO 42 (HIGH): 모든 Socket 이벤트가 validateSession 을 호출하면서 sessionStore.findByUserId 로 Mongo round-trip을 발생시킨다. 세션 정보를 로컬 캐시에 보관하거나 request-context 에서 재사용해야 TPS 하락을 막을 수 있다.
+            Session session = sessionStore.findByUserId(userId).orElse(null);
+            
+            if (session == null) {
                 log.warn("No session found for userId: {}", userId);
                 return SessionValidationResult.invalid("INVALID_SESSION", "세션을 찾을 수 없습니다.");
             }
 
-            if (!sessionId.equals(sessionData.getSessionId())) {
-                log.warn("Session ID mismatch for userId: {}. Provided: {}, Expected: {}", userId, sessionId, sessionData.getSessionId());
+            if (!sessionId.equals(session.getSessionId())) {
+                log.warn("Session ID mismatch for userId: {}. Provided: {}, Expected: {}", userId, sessionId, session.getSessionId());
                 return SessionValidationResult.invalid("INVALID_SESSION", "잘못된 세션 ID입니다.");
             }
 
+            // Check if session has timed out
             long now = Instant.now().toEpochMilli();
-            if (now - sessionData.getLastActivity() > SESSION_TIMEOUT) {
+            if (now - session.getLastActivity() > SESSION_TIMEOUT) {
                 log.warn("Session timed out for userId: {}, sessionId: {}", userId, sessionId);
                 removeSession(userId, sessionId);
                 return SessionValidationResult.invalid("SESSION_EXPIRED", "세션이 만료되었습니다.");
             }
 
+            // Update last activity
+            session.setLastActivity(now);
+            session.setExpiresAt(Instant.now().plusSeconds(SESSION_TTL_SEC));
+            session = sessionStore.save(session);
+
+            SessionData sessionData = toSessionData(session);
             return SessionValidationResult.valid(sessionData);
 
         } catch (Exception e) {
@@ -123,35 +122,16 @@ public class SessionService {
                 return;
             }
 
-            String cacheKey = getCacheKey(userId);
-            SessionData cachedSessionData = cacheRepository.get(cacheKey, SessionData.class);
-
-            if (cachedSessionData != null) {
-                long now = Instant.now().toEpochMilli();
-                if (now - cachedSessionData.getLastActivity() < 30000) {
-                    return;
-                }
-            }
-
             Session session = sessionStore.findByUserId(userId).orElse(null);
-
             if (session == null) {
                 log.debug("No session found to update last activity for user: {}", userId);
                 return;
             }
 
-            long now = Instant.now().toEpochMilli();
-            if (now - session.getLastActivity() < 30000) {
-                return;
-            }
-
-            session.setLastActivity(now);
+            session.setLastActivity(Instant.now().toEpochMilli());
             session.setExpiresAt(Instant.now().plusSeconds(SESSION_TTL_SEC));
             sessionStore.save(session);
-
-            SessionData updatedSessionData = toSessionData(session);
-            cacheRepository.save(cacheKey, updatedSessionData, Duration.ofSeconds(SESSION_TTL_SEC));
-
+            
         } catch (Exception e) {
             log.error("Failed to update session activity for user: {}", userId, e);
         }
@@ -164,7 +144,6 @@ public class SessionService {
             } else {
                 sessionStore.deleteAll(userId);
             }
-            cacheRepository.delete(getCacheKey(userId));
         } catch (Exception e) {
             log.error("Session removal error for userId: {}, sessionId: {}", userId, sessionId, e);
             throw new RuntimeException("세션 삭제 중 오류가 발생했습니다.", e);
@@ -174,7 +153,6 @@ public class SessionService {
     public void removeAllUserSessions(String userId) {
         try {
             sessionStore.deleteAll(userId);
-            cacheRepository.delete(getCacheKey(userId));
         } catch (Exception e) {
             log.error("Remove all sessions error for userId: {}", userId, e);
             throw new RuntimeException("모든 세션 삭제 중 오류가 발생했습니다.", e);
@@ -187,18 +165,13 @@ public class SessionService {
 
     SessionData getActiveSession(String userId) {
         try {
-            String cacheKey = getCacheKey(userId);
-            SessionData sessionData = cacheRepository.get(cacheKey, SessionData.class);
-
-            if (sessionData == null) {
-                Session session = sessionStore.findByUserId(userId).orElse(null);
-                if (session != null) {
-                    sessionData = toSessionData(session);
-                    cacheRepository.save(cacheKey, sessionData, Duration.ofSeconds(SESSION_TTL_SEC));
-                }
+            Session session = sessionStore.findByUserId(userId).orElse(null);
+            
+            if (session == null) {
+                return null;
             }
 
-            return sessionData;
+            return toSessionData(session);
         } catch (Exception e) {
             log.error("Get active session error for userId: {}", userId, e);
             return null;

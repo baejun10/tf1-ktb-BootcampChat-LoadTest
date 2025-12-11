@@ -3,7 +3,6 @@ package com.ktb.chatapp.config;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import java.time.Duration;
-import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
@@ -12,8 +11,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
-import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.repository.configuration.EnableRedisRepositories;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
@@ -29,46 +28,24 @@ public class RedisConfig {
     @Value("${spring.data.redis.port}")
     private int redisPort;
 
-    @Bean(destroyMethod = "destroy")
+    @Bean
     public RedisConnectionFactory redisConnectionFactory() {
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(redisHost, redisPort);
 
-        @SuppressWarnings("rawtypes")
-        GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
-        poolConfig.setMaxTotal(500);
-        poolConfig.setMaxIdle(200);
-        poolConfig.setMinIdle(50);
-        poolConfig.setMaxWait(Duration.ofMillis(500));
-        poolConfig.setTestOnBorrow(false);
-        poolConfig.setTestOnReturn(false);
-        poolConfig.setTestWhileIdle(true);
-        poolConfig.setTimeBetweenEvictionRuns(Duration.ofSeconds(60));
-        poolConfig.setMinEvictableIdleDuration(Duration.ofMinutes(5));
-        poolConfig.setBlockWhenExhausted(true);
-
         SocketOptions socketOptions = SocketOptions.builder()
-                .connectTimeout(Duration.ofMillis(1500))
-                .keepAlive(true)
-                .tcpNoDelay(true)
+                .connectTimeout(Duration.ofSeconds(3))
                 .build();
 
         ClientOptions clientOptions = ClientOptions.builder()
                 .socketOptions(socketOptions)
-                .autoReconnect(true)
                 .build();
 
-        LettucePoolingClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
-                .commandTimeout(Duration.ofMillis(2000))
-                .poolConfig(poolConfig)
+        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
+                .commandTimeout(Duration.ofSeconds(5))
                 .clientOptions(clientOptions)
-                .shutdownTimeout(Duration.ofMillis(100))
                 .build();
 
-        LettuceConnectionFactory factory = new LettuceConnectionFactory(config, clientConfig);
-        factory.setShareNativeConnection(true);
-        factory.setValidateConnection(false);
-        factory.afterPropertiesSet();
-        return factory;
+        return new LettuceConnectionFactory(config, clientConfig);
     }
 
     @Bean
