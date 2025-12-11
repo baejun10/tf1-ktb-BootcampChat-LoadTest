@@ -85,7 +85,7 @@ class ChatMessageHandlerTest {
         Room room = new Room();
         room.setId("room-1");
         room.setParticipantIds(new HashSet<>(java.util.List.of("user-1")));
-        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomCacheService.findRoomById("room-1")).thenReturn(Optional.of(room));
 
         ChatMessageRequest request =
                 ChatMessageRequest.builder()
