@@ -31,15 +31,9 @@ public class RedisConfig {
     @Value("${spring.data.redis.port}")
     private int redisPort;
 
-    @Value("${spring.data.redis.password:}")
-    private String redisPassword;
-
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(redisHost, redisPort);
-        if (redisPassword != null && !redisPassword.isEmpty()) {
-            config.setPassword(RedisPassword.of(redisPassword));
-        }
 
         SocketOptions socketOptions = SocketOptions.builder()
                 .connectTimeout(Duration.ofSeconds(3))
@@ -69,18 +63,17 @@ public class RedisConfig {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "socketio.store.redis.enabled", havingValue = "true")
     public RedissonClient redissonClient() {
         Config config = new Config();
         String address = "redis://" + redisHost + ":" + redisPort;
 
-        var singleServerConfig = config.useSingleServer()
+        config.useSingleServer()
                 .setAddress(address)
-                .setConnectTimeout(3000)
-                .setTimeout(5000);
-
-        if (redisPassword != null && !redisPassword.isEmpty()) {
-            singleServerConfig.setPassword(redisPassword);
-        }
+                .setConnectTimeout(10000)
+                .setTimeout(10000)
+                .setRetryAttempts(3)
+                .setRetryInterval(1500);
 
         return Redisson.create(config);
     }

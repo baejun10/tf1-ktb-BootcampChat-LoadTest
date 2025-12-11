@@ -35,7 +35,7 @@ public class SocketIOConfig {
     @Value("${socketio.server.port:5002}")
     private Integer port;
 
-    @Value("${socketio.store.redis.enabled:false}")
+    @Value("${socketio.store.redis.enabled:true}")
     private Boolean redisStoreEnabled;
 
     @Autowired(required = false)
