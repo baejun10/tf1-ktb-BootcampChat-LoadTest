@@ -112,7 +112,7 @@ const FileMessage = ({
 
       const baseUrl = fileService.getFileUrl(msg.file.filename, false);
       const authenticatedUrl = `${baseUrl}?token=${encodeURIComponent(user?.token)}&sessionId=${encodeURIComponent(user?.sessionId)}&download=true`;
-
+      
       const response = await fetch(authenticatedUrl);
       if (!response.ok) {
         throw new Error('파일 다운로드에 실패했습니다.');
