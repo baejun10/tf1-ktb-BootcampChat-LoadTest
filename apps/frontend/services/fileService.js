@@ -266,7 +266,34 @@ class FileService {
 
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
     const endpoint = forPreview ? 'view' : 'download';
-    return `${baseUrl}/api/files/${endpoint}/${filename}`;
+    const rawUrl = `${baseUrl}/api/files/${endpoint}/${filename}`;
+
+    return forPreview ? rawUrl : this.rewriteDownloadUrl(rawUrl);
+  }
+
+  rewriteDownloadUrl(url) {
+    if (!url) return '';
+
+    try {
+      const parsedUrl = new URL(url);
+      const isTargetHost = parsedUrl.hostname === 'api.chat.goorm-ktb-001.goorm.team';
+      const isDownloadPath = parsedUrl.pathname.startsWith('/api/files/download/');
+
+      if (!isTargetHost || !isDownloadPath) {
+        return url;
+      }
+
+      const filenameSegment = parsedUrl.pathname.replace('/api/files/download/', '');
+      parsedUrl.protocol = 'https:';
+      parsedUrl.hostname = 'd28f2s69cjfiw8.cloudfront.net';
+      parsedUrl.port = '443';
+      parsedUrl.pathname = `/uploads/${filenameSegment}`;
+
+      return parsedUrl.toString();
+    } catch (error) {
+      console.error('Download URL rewrite failed:', error);
+      return url;
+    }
   }
 
   getPreviewUrl(file, token, sessionId, withAuth = true) {
