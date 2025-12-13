@@ -251,6 +251,10 @@ public class RoomService {
         User user = userRepository.findByEmail(name)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + name));
 
+        // 4. 참가자 추가 (atomic $addToSet)
+        //TODO : 021 : 참가자 추가를 전체 Room 문서를 읽고 저장하는 대신 Mongo $addToSet 업데이트로 처리하면 경합과 write volume 을 줄일 수 있다.
+        roomRepository.addParticipant(roomId, user.getId());
+
         // 2. Aggregation 으로 room + creator + participants 한 번에 로딩
         RoomWithUsers roomAgg = roomRepository.findRoomWithUsersById(roomId);
         if (roomAgg == null) {
@@ -263,10 +267,6 @@ public class RoomService {
                 throw new RuntimeException("비밀번호가 일치하지 않습니다.");
             }
         }
-
-        // 4. 참가자 추가 (atomic $addToSet)
-        //TODO : 021 : 참가자 추가를 전체 Room 문서를 읽고 저장하는 대신 Mongo $addToSet 업데이트로 처리하면 경합과 write volume 을 줄일 수 있다.
-        roomRepository.addParticipant(roomId, user.getId());
 
         // 5. 응답용 참가자 리스트 구성
         List<User> participantIds = roomAgg.getParticipants();
