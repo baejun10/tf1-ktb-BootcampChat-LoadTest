@@ -23,6 +23,7 @@ public class SessionService {
 
     private final SessionStore sessionStore;
     public static final long SESSION_TTL_SEC = DurationStyle.detectAndParse(SESSION_TTL).getSeconds();
+    private static final long SESSION_TIMEOUT = SESSION_TTL_SEC * 1000;
 
     private String generateSessionId() {
         return UUID.randomUUID().toString().replace("-", "");
@@ -40,34 +41,24 @@ public class SessionService {
 
     public SessionCreationResult createSession(String userId, SessionMetadata metadata) {
         try {
-            java.util.Optional<Session> existingSession = sessionStore.findByUserId(userId);
+            //TODO : 016 : 로그인 때마다 deleteAll 을 호출하면 사용자당 높은 write load 가 발생하므로 sessionId 를 비교해 조건부 삭제하거나 TTL index 를 활용해 자연 만료시키는 방식으로 줄일 수 있다.
+            // Remove all existing user sessions
+            removeAllUserSessions(userId);
 
-            String sessionId;
+            String sessionId = generateSessionId();
             long now = Instant.now().toEpochMilli();
-            Session session;
-
-            if (existingSession.isPresent()) {
-                session = existingSession.get();
-                sessionId = session.getSessionId();
-                session.setLastActivity(now);
-                session.setExpiresAt(Instant.now().plusSeconds(SESSION_TTL_SEC));
-                session.setMetadata(metadata);
-                log.debug("Session reused for userId: {}", userId);
-            } else {
-                sessionId = generateSessionId();
-                session = Session.builder()
-                        .userId(userId)
-                        .sessionId(sessionId)
-                        .createdAt(now)
-                        .lastActivity(now)
-                        .metadata(metadata)
-                        .expiresAt(Instant.now().plusSeconds(SESSION_TTL_SEC))
-                        .build();
-                log.debug("New session created for userId: {}", userId);
-            }
+            
+            Session session = Session.builder()
+                    .userId(userId)
+                    .sessionId(sessionId)
+                    .createdAt(now)
+                    .lastActivity(now)
+                    .metadata(metadata)
+                    .expiresAt(Instant.now().plusSeconds(SESSION_TTL_SEC))
+                    .build();
 
             session = sessionStore.save(session);
-
+            
             SessionData sessionData = toSessionData(session);
 
             return SessionCreationResult.builder()
@@ -89,8 +80,9 @@ public class SessionService {
                 return SessionValidationResult.invalid("INVALID_PARAMETERS", "유효하지 않은 세션 파라미터");
             }
 
+            //TODO 42 (HIGH): 모든 Socket 이벤트가 validateSession 을 호출하면서 sessionStore.findByUserId 로 Mongo round-trip을 발생시킨다. 세션 정보를 로컬 캐시에 보관하거나 request-context 에서 재사용해야 TPS 하락을 막을 수 있다.
             Session session = sessionStore.findByUserId(userId).orElse(null);
-
+            
             if (session == null) {
                 log.warn("No session found for userId: {}", userId);
                 return SessionValidationResult.invalid("INVALID_SESSION", "세션을 찾을 수 없습니다.");
@@ -101,7 +93,16 @@ public class SessionService {
                 return SessionValidationResult.invalid("INVALID_SESSION", "잘못된 세션 ID입니다.");
             }
 
-            session.setLastActivity(Instant.now().toEpochMilli());
+            // Check if session has timed out
+            long now = Instant.now().toEpochMilli();
+            if (now - session.getLastActivity() > SESSION_TIMEOUT) {
+                log.warn("Session timed out for userId: {}, sessionId: {}", userId, sessionId);
+                removeSession(userId, sessionId);
+                return SessionValidationResult.invalid("SESSION_EXPIRED", "세션이 만료되었습니다.");
+            }
+
+            // Update last activity
+            session.setLastActivity(now);
             session.setExpiresAt(Instant.now().plusSeconds(SESSION_TTL_SEC));
             session = sessionStore.save(session);
 

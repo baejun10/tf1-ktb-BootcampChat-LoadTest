@@ -162,7 +162,12 @@ public class AuthController {
             );
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
+            
+            //TODO 41 (MEDIUM): 로그인 시마다 sessionService.removeAllUserSessions 를 호출하면 사용자마다 write-heavy 작업이 발생해 부하 테스트에서 Mongo IOPS 를 잠식한다. 세션 수가 1개인 경우 skip 하는 등의 최적화를 고려하라.
+            // 단일 세션 정책을 위해 기존 세션 제거
+            sessionService.removeAllUserSessions(user.getId());
 
+            // Create new session
             SessionMetadata metadata = new SessionMetadata(
                     request.getHeader("User-Agent"),
                     getClientIpAddress(request),
