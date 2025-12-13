@@ -25,7 +25,7 @@
   대상 서버
 
   - BASE_URL: 테스트 대상 URL
-    - 기본값: https://chat.goorm-ktb-024.goorm.teams
+    - 기본값: https://chat.goorm-ktb-001.goorm.team
 
   부하 설정
 
@@ -64,6 +64,29 @@
 
   # 커스텀 금칙어로 테스트
   FORBIDDEN_WORDS="word1,word2,word3" make artillery
+  ```
+
+## 리포트 & 대시보드
+
+  `make artillery`를 실행하면 `reports/` 디렉터리에 JSON/HTML 한 쌍이 자동으로 생성됩니다.
+
+  - 파일명 패턴: `reports/latest-YYYYMMDD-HHMMSS.(json|html)`
+  - JSON: Artillery 원시 지표
+  - HTML: `scripts/render-report.js`가 생성하는 요약 대시보드 (자동으로 `open`/`xdg-open` 시도)
+
+  브라우저가 자동으로 뜨지 않았다면 직접 열어 확인하세요:
+
+  ```bash
+  open reports/latest-20250101-120000.html
+  # 또는
+  xdg-open reports/latest-20250101-120000.html
+  ```
+
+  Artillery v2에서는 `artillery report` 명령이 deprecated 되었기 때문에, JSON → HTML 변환을 위해 `scripts/render-report.js` 스크립트를 사용합니다. 필요하면 단독으로 실행할 수도 있습니다:
+
+  ```bash
+  cd e2e/artillery
+  node scripts/render-report.js reports/latest-20250101-120000.json reports/custom.html
   ```
 
 ## 디렉토리 구조
@@ -171,7 +194,7 @@
 
   1. Headless 모드: 기본적으로 headless 모드로 실행됩니다. 디버깅이 필요한 경우 artillery-config.yaml에서 **`headless: 
   false`** 로 변경하세요.
-  2. 대상 URL: 기본 대상은 https://chat.goorm-ktb-024.goorm.teams입니다. BASE_URL 환경 변수로 변경 가능합니다.
+  2. 대상 URL: 기본 대상은 https://chat.goorm-ktb-001.goorm.team입니다. BASE_URL 환경 변수로 변경 가능합니다.
   3. 타임아웃 설정: 네트워크 환경에 따라 타임아웃 조정이 필요할 수 있습니다.
   4. 파일 경로: 파일 업로드 시나리오는 ../fixtures/images/profile.jpg 파일을 사용합니다. 파일이 존재하는지 확인하세요.
   5. 테스트 데이터: 각 시나리오가 고유한 사용자를 생성하므로 DB가 증가합니다. 주기적인 정리를 계획하세요.
