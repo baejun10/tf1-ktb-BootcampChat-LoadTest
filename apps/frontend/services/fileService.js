@@ -112,6 +112,7 @@ class FileService {
         },
         withCredentials: false,
         cancelToken: source.token,
+        timeout: 15000,
         onUploadProgress: (progressEvent) => {
           if (onProgress && progressEvent.total) {
             const percentCompleted = Math.round(
