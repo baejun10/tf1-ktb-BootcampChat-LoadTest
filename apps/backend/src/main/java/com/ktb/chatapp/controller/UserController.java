@@ -2,6 +2,7 @@ package com.ktb.chatapp.controller;
 
 import com.ktb.chatapp.dto.StandardResponse;
 import com.ktb.chatapp.dto.ProfileImageResponse;
+import com.ktb.chatapp.dto.DirectProfileImageRequest;
 import com.ktb.chatapp.dto.PresignedUploadRequest;
 import com.ktb.chatapp.dto.PresignedUploadResponse;
 import com.ktb.chatapp.dto.FinalizeUploadRequest;
@@ -168,6 +169,36 @@ public class UserController {
         } catch (Exception e) {
             log.error("프로필 이미지 완료 처리 중 오류 발생: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().body(StandardResponse.error("이미지 업로드 완료 처리 중 오류가 발생했습니다."));
+        }
+    }
+
+    @Operation(summary = "프로필 이미지 URL 직접 등록", description = "S3 등 외부 경로로 업로드된 이미지를 바로 등록합니다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "이미지 등록 성공",
+            content = @Content(schema = @Schema(implementation = ProfileImageResponse.class))),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청",
+            content = @Content(schema = @Schema(implementation = StandardResponse.class))),
+        @ApiResponse(responseCode = "401", description = "인증 실패",
+            content = @Content(schema = @Schema(implementation = StandardResponse.class))),
+        @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음",
+            content = @Content(schema = @Schema(implementation = StandardResponse.class)))
+    })
+    @PostMapping("/profile-image/direct")
+    public ResponseEntity<?> updateProfileImageDirect(
+            Principal principal,
+            @Valid @RequestBody DirectProfileImageRequest request) {
+        try {
+            ProfileImageResponse response = userService.updateProfileImageFromUrl(principal.getName(), request.getImageUrl());
+            return ResponseEntity.ok(response);
+        } catch (UsernameNotFoundException e) {
+            log.error("프로필 이미지 URL 등록 실패 - 사용자 없음: {}", e.getMessage());
+            return ResponseEntity.status(404).body(StandardResponse.error("사용자를 찾을 수 없습니다."));
+        } catch (IllegalArgumentException e) {
+            log.error("프로필 이미지 URL 등록 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(StandardResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("프로필 이미지 URL 등록 중 오류 발생: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(StandardResponse.error("이미지 등록 중 오류가 발생했습니다."));
         }
     }
 

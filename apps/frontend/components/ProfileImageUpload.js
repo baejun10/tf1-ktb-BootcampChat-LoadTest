@@ -5,6 +5,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import CustomAvatar from '@/components/CustomAvatar';
 import { Toast } from '@/components/Toast';
 
+const DEFAULT_S3_UPLOAD_ORIGIN = 'https://bootcamp-chat-files.s3.ap-northeast-2.amazonaws.com';
+const DEFAULT_S3_PUBLIC_BASE_URL = 'https://d28f2s69cjfiw8.cloudfront.net';
+
+const trimTrailingSlash = (value = '') => {
+  if (!value) return '';
+  return value.endsWith('/') ? value.slice(0, -1) : value;
+};
+
 const ProfileImageUpload = ({ currentImage, onImageChange }) => {
   const { user } = useAuth();
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -49,49 +57,42 @@ const ProfileImageUpload = ({ currentImage, onImageChange }) => {
         throw new Error('인증 정보가 없습니다.');
       }
 
-      const presignResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile-image/presign`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-auth-token': user?.token,
-          'x-session-id': user?.sessionId
-        },
-        body: JSON.stringify({
-          filename: file.name,
-          mimetype: file.type,
-          size: file.size
-        })
-      });
+      const uploadOrigin = trimTrailingSlash(process.env.NEXT_PUBLIC_S3_UPLOAD_ORIGIN || DEFAULT_S3_UPLOAD_ORIGIN);
+      const publicBaseUrl = trimTrailingSlash(process.env.NEXT_PUBLIC_S3_PUBLIC_BASE_URL || DEFAULT_S3_PUBLIC_BASE_URL);
+      const fileExtension = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : '.png';
+      const uniqueKey = `uploads/profiles/${Date.now()}_${Math.random().toString(16).slice(2)}${fileExtension}`;
+      const uploadUrl = `${uploadOrigin}/${uniqueKey}`;
 
-      if (!presignResponse.ok) {
-        const errorData = await presignResponse.json();
-        throw new Error(errorData.message || 'Presigned URL 생성에 실패했습니다.');
-      }
-
-      const { uploadUrl, headers, uploadId } = await presignResponse.json();
-
-      await fetch(uploadUrl, {
+      const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
-        headers: headers,
+        headers: {
+          'Content-Type': file.type
+        },
         body: file
       });
 
-      const finalizeResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile-image/finalize`, {
+      if (!uploadResponse.ok) {
+        throw new Error('S3 업로드에 실패했습니다.');
+      }
+
+      const publicImageUrl = `${publicBaseUrl}/${uniqueKey}`;
+
+      const registerResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile-image/direct`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-auth-token': user?.token,
           'x-session-id': user?.sessionId
         },
-        body: JSON.stringify({ uploadId })
+        body: JSON.stringify({ imageUrl: publicImageUrl })
       });
 
-      if (!finalizeResponse.ok) {
-        const errorData = await finalizeResponse.json();
-        throw new Error(errorData.message || '이미지 업로드 완료 처리에 실패했습니다.');
+      if (!registerResponse.ok) {
+        const errorData = await registerResponse.json();
+        throw new Error(errorData.message || '이미지 등록에 실패했습니다.');
       }
 
-      const data = await finalizeResponse.json();
+      const data = await registerResponse.json();
 
       const updatedUser = {
         ...user,

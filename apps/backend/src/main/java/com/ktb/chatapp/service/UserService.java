@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.util.StringUtils;
 
 @Service
 @Slf4j
@@ -166,6 +167,31 @@ public class UserService {
         } catch (Exception e) {
             log.warn("기존 프로필 이미지 삭제 실패: {}", e.getMessage());
         }
+    }
+
+    public ProfileImageResponse updateProfileImageFromUrl(String email, String imageUrl) {
+        if (!StringUtils.hasText(imageUrl)) {
+            throw new IllegalArgumentException("이미지 주소가 제공되지 않았습니다.");
+        }
+
+        User user = userRepository.findByEmail(email.toLowerCase())
+                .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
+
+        if (user.getProfileImage() != null && !user.getProfileImage().isEmpty()) {
+            deleteOldProfileImage(user.getProfileImage());
+        }
+
+        user.setProfileImage(imageUrl);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        log.info("프로필 이미지 URL 업데이트 - User ID: {}, File: {}", user.getId(), imageUrl);
+
+        return new ProfileImageResponse(
+                true,
+                "프로필 이미지가 업데이트되었습니다.",
+                imageUrl
+        );
     }
 
     public ProfileImageResponse finalizeProfileImageUpload(String email, String uploadId) {
