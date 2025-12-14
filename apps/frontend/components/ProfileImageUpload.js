@@ -70,10 +70,19 @@ const ProfileImageUpload = ({ currentImage, onImageChange }) => {
 
       const { uploadUrl, headers, uploadId } = await presignResponse.json();
 
+      const uploadHeaders = new Headers();
+      if (headers) {
+        Object.entries(headers).forEach(([key, value]) => {
+          uploadHeaders.set(key, value);
+        });
+      }
+      uploadHeaders.set('Content-Type', file.type);
+
       await fetch(uploadUrl, {
         method: 'PUT',
-        headers: headers,
-        body: file
+        headers: uploadHeaders,
+        body: file,
+        credentials: 'omit'
       });
 
       const finalizeResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile-image/finalize`, {
