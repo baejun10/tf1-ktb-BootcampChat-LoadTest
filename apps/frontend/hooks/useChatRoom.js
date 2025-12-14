@@ -174,26 +174,18 @@ export const useChatRoom = () => {
       }
 
       setMessages(prev => {
-        // 중복 메시지 필터링 개선
-        const newMessages = loadedMessages.filter(msg => {
-          if (!msg._id) return false;
-          if (processedMessageIds.current.has(msg._id)) return false;
-          processedMessageIds.current.add(msg._id);
-          return true;
+        const messageMap = new Map(prev.map(m => [m._id, m]));
+
+        loadedMessages.forEach(msg => {
+          if (msg._id && !processedMessageIds.current.has(msg._id)) {
+            messageMap.set(msg._id, msg);
+            processedMessageIds.current.add(msg._id);
+          }
         });
 
-        // 기존 메시지와 새 메시지 결합 및 정렬
-        const allMessages = [...prev, ...newMessages].sort((a, b) => {
-          return new Date(a.timestamp || 0) - new Date(b.timestamp || 0);
-        });
-
-        // 중복 제거 (가장 최근 메시지 유지)
-        const messageMap = new Map();
-        allMessages.forEach(msg => messageMap.set(msg._id, msg));
         return Array.from(messageMap.values());
       });
 
-      // 메시지 로드 상태 업데이트
       if (isInitialLoad) {
         setHasMoreMessages(hasMore);
         initialLoadCompletedRef.current = true;

@@ -341,47 +341,45 @@ export const useRoomHandling = (
         setError(null);
         messageRetryCountRef.current = 0;
 
-        // 1. Socket Setup
+        // 1. Socket Setup (필수 선행)
         socketRef.current = await setupSocket()
           .catch((error) => {
             console.log('Socket setup error:', error);
             router.push('/_error');
           });
 
-        // 2. Fetch Room Data
-        const roomData = await fetchRoomData(router.query.room);
-        
-        // Ensure current user is included in participants for display
-        if (currentUser && roomData.participants) {
-          const isUserInParticipants = roomData.participants.some(p =>
-            p._id === currentUser.id || p.id === currentUser.id
-          );
-          
-          if (!isUserInParticipants) {
-            roomData.participants = [
-              ...roomData.participants,
-              {
-                _id: currentUser.id,
-                id: currentUser.id,
-                name: currentUser.name,
-                email: currentUser.email
-              }
-            ];
-          }
-        }
-        
-        setRoom(roomData);
-
-        // 3. Setup Event Listeners
+        // 2. Setup Event Listeners (동기 작업)
         if (mountedRef.current) {
           setupEventListeners();
         }
 
-        // 4. Join Room and Load Messages
+        // 3. Join Room과 동시에 초기 메시지 로드는 백엔드에서 자동으로 전송됨
         if (mountedRef.current && socketRef.current?.connected) {
-          await joinRoom(router.query.room);
+          const joinData = await joinRoom(router.query.room);
 
-          await loadInitialMessages(router.query.room);
+          if (joinData && joinData.room) {
+            const roomData = joinData.room;
+
+            if (currentUser && roomData.participants) {
+              const isUserInParticipants = roomData.participants.some(p =>
+                p._id === currentUser.id || p.id === currentUser.id
+              );
+
+              if (!isUserInParticipants) {
+                roomData.participants = [
+                  ...roomData.participants,
+                  {
+                    _id: currentUser.id,
+                    id: currentUser.id,
+                    name: currentUser.name,
+                    email: currentUser.email
+                  }
+                ];
+              }
+            }
+
+            setRoom(roomData);
+          }
         }
 
         if (mountedRef.current) {
@@ -390,12 +388,12 @@ export const useRoomHandling = (
         }
 
       } catch (error) {
-        
+
         if (mountedRef.current) {
           const errorMessage = error.message.includes('시간 초과') ?
             '채팅방 연결 시간이 초과되었습니다.' :
             error.message || '채팅방 연결에 실패했습니다.';
-            
+
           setError(errorMessage);
           cleanup();
 
@@ -411,7 +409,7 @@ export const useRoomHandling = (
           setLoading(false);
           initializingRef.current = false;
         }
-        
+
         clearAllTimeouts();
         setupPromiseRef.current = null;
       }
@@ -423,9 +421,7 @@ export const useRoomHandling = (
     socketRef,
     mountedRef,
     setupSocket,
-    fetchRoomData,
     joinRoom,
-    loadInitialMessages,
     cleanup,
     setupEventListeners,
     setError,
@@ -434,7 +430,8 @@ export const useRoomHandling = (
     setIsInitialized,
     initializingRef,
     setupCompleteRef,
-    clearAllTimeouts
+    clearAllTimeouts,
+    currentUser
   ]);
 
   useEffect(() => {

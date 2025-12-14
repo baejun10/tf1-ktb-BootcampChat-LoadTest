@@ -141,9 +141,21 @@ public class RoomJoinHandler {
                     .stream()
                     .map(UserResponse::from)
                     .toList();
-            
+
+            RoomResponse roomResponse = RoomResponse.builder()
+                .id(room.getId())
+                .name(room.getName())
+                .hasPassword(room.isHasPassword())
+                .creator(participants.stream()
+                    .filter(p -> p.getId().equals(room.getCreatorId()))
+                    .findFirst()
+                    .orElse(null))
+                .participants(participants)
+                .build();
+
             JoinRoomSuccessResponse response = JoinRoomSuccessResponse.builder()
                 .roomId(roomId)
+                .room(roomResponse)
                 .participants(participants)
                 .messages(messageLoadResult.getMessages())
                 .hasMore(messageLoadResult.isHasMore())
