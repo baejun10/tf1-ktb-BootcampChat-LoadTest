@@ -157,10 +157,8 @@ public class UserService {
         }
     }
 
-    /**
-     * 기존 프로필 이미지 삭제
-     */
-    private void deleteOldProfileImage(String profileImageUrl) {
+    @org.springframework.scheduling.annotation.Async("fileCleanupExecutor")
+    public void deleteOldProfileImage(String profileImageUrl) {
         try {
             fileService.deleteStoredFileByUrl(profileImageUrl);
         } catch (Exception e) {
