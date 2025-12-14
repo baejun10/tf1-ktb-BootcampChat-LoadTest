@@ -53,3 +53,4 @@ yarn-error.log*
 # Misc
 .cache/
 *.tsbuildinfo
+/e2e/artillery/reports

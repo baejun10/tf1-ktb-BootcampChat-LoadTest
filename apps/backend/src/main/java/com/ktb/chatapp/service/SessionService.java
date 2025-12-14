@@ -42,11 +42,12 @@ public class SessionService {
     public SessionCreationResult createSession(String userId, SessionMetadata metadata) {
         try {
             //TODO : 016 : 로그인 때마다 deleteAll 을 호출하면 사용자당 높은 write load 가 발생하므로 sessionId 를 비교해 조건부 삭제하거나 TTL index 를 활용해 자연 만료시키는 방식으로 줄일 수 있다.
-            // -> 유저당 세션 1개를 사용한다
+            // Remove all existing user sessions
+            removeAllUserSessions(userId);
 
             String sessionId = generateSessionId();
             long now = Instant.now().toEpochMilli();
-
+            
             Session session = Session.builder()
                     .userId(userId)
                     .sessionId(sessionId)

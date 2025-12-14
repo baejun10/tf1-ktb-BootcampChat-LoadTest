@@ -7,7 +7,6 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -39,12 +38,12 @@ public class BannedWordConfig {
         Set<String> words;
         try (BufferedReader reader =
                 new BufferedReader(
-                        new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8));
-                Stream<String> lines = reader.lines()) {
-            words = lines
-                    .map(String::trim)
-                    .filter(line -> !line.isEmpty())
-                    .collect(Collectors.toUnmodifiableSet());
+                        new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8))) {
+            words =
+                    reader.lines()
+                            .map(String::trim)
+                            .filter(line -> !line.isEmpty())
+                            .collect(Collectors.toUnmodifiableSet());
         } catch (IOException e) {
             throw new IllegalStateException(
                     "Failed to load banned words from " + bannedWordLocation, e);

@@ -110,6 +110,7 @@ jobs:
           STORAGE_PROVIDER: s3
           CURRENT_IP: ${{ matrix.ip }}
 
+
         run: |
           echo "$SSH_KEY" > key.pem
           chmod 600 key.pem
@@ -134,7 +135,7 @@ jobs:
             chmod +x /home/ubuntu/ktb-chat-backend/temp/deploy.sh && \
             mv /home/ubuntu/ktb-chat-backend/temp/deploy.sh /home/ubuntu/ktb-chat-backend/deploy.sh && \
           
-            # 2. hosts 등록
+            # hosts 등록
             if ! grep -q 'chat-mongodb-01' /etc/hosts; then
               echo '>>> [Auto-Config] MongoDB IP 등록...'
               echo '10.0.101.147  chat-mongodb-01' | sudo tee -a /etc/hosts
@@ -142,7 +143,31 @@ jobs:
               echo '10.0.101.249  chat-mongodb-03' | sudo tee -a /etc/hosts
             fi && \
           
-            # 3. .env 파일 재생성 (따옴표 필수!)
+            # 4. systemd 서비스 파일 재작성 (JVM 옵션 클린 적용)
+            echo '>>> [Auto-Config] systemd 서비스 파일 재작성 (JAVA_OPTS 적용)...'
+            cat << EOF_SERVICE | sudo tee /etc/systemd/system/ktb-chat.service
+          [Unit]
+          Description=KTB Chat Backend
+          After=network.target
+          
+          [Service]
+          User=ubuntu
+          WorkingDirectory=/home/ubuntu/ktb-chat-backend
+          EnvironmentFile=/home/ubuntu/ktb-chat-backend/.env
+          ExecStart=/usr/bin/java -Xms1024m -Xmx1536m -XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/java_heap.hprof -jar /home/ubuntu/ktb-chat-backend/app.jar
+          SuccessExitStatus=143
+          Restart=always
+          RestartSec=10
+          
+          [Install]
+          WantedBy=multi-user.target
+          EOF_SERVICE
+          
+            # 데몬 리로드 (변경 사항 적용을 위해 필수)
+            echo '>>> [Auto-Config] systemd 데몬 리로드...'
+            sudo systemctl daemon-reload && \
+          
+            # 4. .env 파일 재생성 (따옴표 필수!)
             echo '>>> [Auto-Config] .env 파일 재생성...'
             cat << EOF | sudo tee /home/ubuntu/ktb-chat-backend/.env
           STORAGE_PROVIDER=\"$STORAGE_PROVIDER\"
