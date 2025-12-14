@@ -138,7 +138,7 @@ class SocketService {
     }
 
     //TODO 43 (HIGH): RECONNECT 경로에서는 reactionHandlers 가 비워지지 않아 페이지 새로고침/재접속 시 리스너가 계속 누적된다. DISCONNECT/MANUAL 시점에는 반드시 clear 하도록 조건을 재구성하라.
-    if (reason !== CLEANUP_REASONS.RECONNECT) {
+    if (reason === CLEANUP_REASONS.DISCONNECT || reason === CLEANUP_REASONS.MANUAL) {
       this.reactionHandlers.clear();
     }
 

@@ -106,6 +106,11 @@ axiosInstance.interceptors.response.use(
   async (error) => {
     //TODO 44 (HIGH): 실패/타임아웃 요청은 pendingRequests 에서 제거되지 않아 Map 이 무한히 커진다. 여기서 requestKey 를 계산해 항상 delete 하도록 수정해야 부하 테스트 중 메모리 누수를 막을 수 있다.
     const config = error.config || {};
+    const requestKey = config.method && config.url ? `${config.method}:${config.url}` : null;
+    if (requestKey) {
+      pendingRequests.delete(requestKey);
+    }
+
     config.retryCount = config.retryCount || 0;
 
     // 요청이 취소된 경우
