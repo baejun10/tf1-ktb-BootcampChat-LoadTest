@@ -7,8 +7,12 @@ import com.corundumstudio.socketio.annotation.SpringAnnotationScanner;
 import com.corundumstudio.socketio.namespace.Namespace;
 import com.corundumstudio.socketio.protocol.JacksonJsonSupport;
 import com.corundumstudio.socketio.store.RedissonStoreFactory;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.ktb.chatapp.websocket.socketio.ChatDataStore;
 import com.ktb.chatapp.websocket.socketio.RedisChatDataStore;
 import java.util.Objects;
@@ -92,6 +96,15 @@ public class SocketIOConfig {
     @Bean
     @ConditionalOnProperty(name = "socketio.enabled", havingValue = "true", matchIfMissing = true)
     public ChatDataStore chatDataStore() {
-        return new RedisChatDataStore(redisTemplate, new ObjectMapper().registerModule(new JavaTimeModule()));
+        // RedisTemplate과 동일한 ObjectMapper 설정 사용
+        // @class 타입 정보를 포함하여 직렬화/역직렬화를 일관되게 처리
+        ObjectMapper objectMapper = JsonMapper.builder()
+                .addModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .activateDefaultTyping(LaissezFaireSubTypeValidator.instance,
+                        ObjectMapper.DefaultTyping.NON_FINAL,
+                        JsonTypeInfo.As.PROPERTY)
+                .build();
+        return new RedisChatDataStore(redisTemplate, objectMapper);
     }
 }
