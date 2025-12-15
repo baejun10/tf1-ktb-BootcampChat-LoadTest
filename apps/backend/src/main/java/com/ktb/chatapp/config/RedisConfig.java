@@ -1,8 +1,11 @@
 package com.ktb.chatapp.config;
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import java.time.Duration;
@@ -55,9 +58,13 @@ public class RedisConfig {
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
-        ObjectMapper objectMapper = new ObjectMapper()
-                .registerModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        ObjectMapper objectMapper = JsonMapper.builder()
+                .addModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .activateDefaultTyping(LaissezFaireSubTypeValidator.instance,
+                        ObjectMapper.DefaultTyping.NON_FINAL,
+                        JsonTypeInfo.As.PROPERTY)
+                .build();
         GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(objectMapper);
         template.setKeySerializer(new StringRedisSerializer());
         template.setValueSerializer(serializer);
