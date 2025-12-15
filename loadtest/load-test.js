@@ -294,7 +294,7 @@ class LoadTester {
         socket.emit('chatMessage', {
           room: roomId,
           type: 'text',
-          content: `Load test message ${i + 1}/${messageCount} from user ${userId} at ${new Date().toISOString()}`
+          content: `Hello this is a test message number ${i + 1}`
         });
 
         this.metrics.messagesSent++;
