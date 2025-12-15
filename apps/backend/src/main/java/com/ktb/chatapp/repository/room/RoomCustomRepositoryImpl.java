@@ -3,12 +3,13 @@ package com.ktb.chatapp.repository.room;
 import com.ktb.chatapp.dto.RoomWithUsers;
 import com.ktb.chatapp.repository.RoomCustomRepository;
 import lombok.RequiredArgsConstructor;
+import org.bson.Document;
+import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.aggregation.Aggregation;
-import org.springframework.data.mongodb.core.aggregation.LookupOperation;
-import org.springframework.data.mongodb.core.aggregation.MatchOperation;
-import org.springframework.data.mongodb.core.aggregation.UnwindOperation;
+import org.springframework.data.mongodb.core.aggregation.*;
 import org.springframework.data.mongodb.core.query.Criteria;
+
+import java.util.List;
 
 @RequiredArgsConstructor
 public class RoomCustomRepositoryImpl implements RoomCustomRepository {
@@ -17,32 +18,53 @@ public class RoomCustomRepositoryImpl implements RoomCustomRepository {
 
     @Override
     public RoomWithUsers findRoomWithUsersById(String roomId) {
-        // 1. 해당 room만 매칭
-        MatchOperation match = Aggregation.match(Criteria.where("_id").is(roomId));
+        AggregationOperation addObjectIdFields = context -> new Document("$addFields",
+                new Document("participantObjectIds",
+                        new Document("$map",
+                                new Document("input", "$participantIds")
+                                        .append("as", "pid")
+                                        .append("in", new Document("$toObjectId", "$$pid")))
+                ).append("createObjectId",
+                        new Document("cond", List.of(
+                                new Document("$cond", List.of(
+                                        new Document("$ifNull", List.of("$creator", false)),
+                                        new Document("$toObjectId", "$creator"),
+                                        new Document()
+                                ))
+                        ))));
 
-        // 2. participants 조인
-        LookupOperation lookupParticipants = LookupOperation.newLookup()
-                .from("users")
-                .localField("participantIds")
-                .foreignField("_id")
-                .as("participants");
+        AggregationOperation lookupParticipants = context -> new Document("$lookup",
+                new Document("from", "users")
+                        .append("let", new Document("pids", "$participantObjectIds"))
+                        .append("pipeline", List.of(
+                                new Document("$match",
+                                        new Document("$expr",
+                                                new Document("$in", List.of("$_id", "$$pids"))
+                                        )
+                                )
+                        ))
+                        .append("as", "participants")
+        );
 
-        // 3. creator 조인
-        LookupOperation lookupCreator = LookupOperation.newLookup()
-                .from("users")
-                .localField("creator")
-                .foreignField("_id")
-                .as("creatorUser");
+        AggregationOperation lookupCreator = context -> new Document("$lookup",
+                new Document("from", "users")
+                        .append("let", new Document("cid", "$creatorObjectId"))
+                        .append("pipeline", List.of(
+                                new Document("$match",
+                                        new Document("$expr",
+                                                new Document("$eq", List.of("$_id", "$$cid"))
+                                        )
+                                )
+                        ))
+                        .append("as", "creatorUser")
+        );
 
-        // 4. creatorUser 는 배열이므로 단일 객체로 풀어줌
-        UnwindOperation unwindCreator = Aggregation.unwind("creatorUser", true);
-
-        // 필요시 projection으로 Room 필드/유저 필드 줄일 수 있음
         Aggregation aggregation = Aggregation.newAggregation(
-                match,
+                Aggregation.match(Criteria.where("_id").is(new ObjectId(roomId))),
+                addObjectIdFields,
                 lookupParticipants,
                 lookupCreator,
-                unwindCreator
+                Aggregation.unwind("creatorUser", true)
         );
 
         return mongoTemplate.aggregate(aggregation, "rooms", RoomWithUsers.class)
