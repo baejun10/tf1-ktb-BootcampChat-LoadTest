@@ -98,8 +98,8 @@ public class BannedWordChecker {
 
         private static class TrieNode {
             final Map<Character, TrieNode> children = new HashMap<>();
-            TrieNode failure;
-            boolean isEndOfWord;
+            volatile TrieNode failure;
+            volatile boolean isEndOfWord;
         }
     }
 }
