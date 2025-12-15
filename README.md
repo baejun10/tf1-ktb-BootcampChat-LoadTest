@@ -54,3 +54,4 @@ NextJS와 Spring Boot 기반 채팅 애플리케이션 모노레포입니다.
 2. 루트에서 `npm run dev`를 실행하면 자동으로 다음이 동시에 구동됩니다:
     - `apps/frontend` 디렉터리에서 `npm run dev`
     - `apps/backend` 디렉터리에서 `make dev`
+

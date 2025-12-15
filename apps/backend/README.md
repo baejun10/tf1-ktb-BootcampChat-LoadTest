@@ -155,3 +155,4 @@ MongoDB와 Redis가 이미 실행 중이라면 이 단계를 건너뛸 수 있�
 - `.env`의 필수 키가 누락되면 애플리케이션이 부팅 중 예외를 발생시킵니다.
 - MongoDB/Redis 연결 오류 시 `docker compose ps`로 컨테이너 상태를 확인하거나 `application.properties`의 기본값을 검토하세요.
 - OpenAI 통합을 사용하지 않을 경우 `OPENAI_API_KEY`를 제거하면 관련 기능은 비활성화됩니다.
+
